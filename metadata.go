@@ -118,6 +118,3 @@ type IDPSSODescriptor struct {
 	NameIDFormat               []string        `xml:"NameIDFormat"`
 	SingleSignOnService        []Endpoint      `xml:"SingleSignOnService"`
 }
-
-// EmptyMetadata is an empty metadata value.
-var EmptyMetadata = Metadata{}
