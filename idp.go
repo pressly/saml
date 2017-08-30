@@ -442,7 +442,7 @@ func (req *IdpAuthnRequest) MarshalAssertion() error {
 	)
 
 	// TODO: pick an encryption algorithm from the actual metadata.
-	buf, err = xmlsec.Encrypt(tpl, buf, spCertFile, "aes128-cbc")
+	buf, err = xmlsec.Encrypt(tpl, buf, spCertFile, "aes-128-cbc")
 	if err != nil {
 		if IsSecurityException(err, &req.IDP.SecurityOpts) {
 			return err
@@ -493,6 +493,10 @@ func (idp *IdentityProvider) GetSPCertFile() (string, error) {
 		return "", err
 	}
 
+	if meta.SPSSODescriptor == nil {
+		return "", errors.New("Missing SPSSODescriptor data")
+	}
+
 	cert := ""
 	for _, keyDescriptor := range meta.SPSSODescriptor.KeyDescriptor {
 		if keyDescriptor.Use == "encryption" {
@@ -530,6 +534,7 @@ func (idp *IdentityProvider) GetSPMetadata() (*Metadata, error) {
 		m := *(idp.SPMetadata)
 		return &m, nil
 	}
+
 	if idp.SPMetadataURL == "" {
 		return nil, errors.New("Missing metadata URL.")
 	}
@@ -551,6 +556,6 @@ func (idp *IdentityProvider) GetSPMetadata() (*Metadata, error) {
 		return nil, err
 	}
 
-	m := *(idp.SPMetadata)
-	return &m, nil
+	idp.SPMetadata = &metadata
+	return &metadata, nil
 }

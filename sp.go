@@ -168,8 +168,8 @@ func (sp *ServiceProvider) GetIdPMetadata() (*Metadata, error) {
 		return nil, err
 	}
 
-	m := *(sp.IdPMetadata)
-	return &m, nil
+	sp.IdPMetadata = &metadata
+	return &metadata, nil
 }
 
 // Cert returns a *pem.Block value that corresponds to the SP's certificate.

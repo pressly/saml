@@ -46,7 +46,7 @@ func TestEncryptData(t *testing.T) {
 		"http://www.w3.org/2001/04/xmlenc#aes128-cbc",
 		"http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
 	)
-	out, err := Encrypt(tpl, []byte(in), "_testdata/test.crt", "aes-128")
+	out, err := Encrypt(tpl, []byte(in), "_testdata/test.crt", "aes-128-cbc")
 	assert.NoError(t, err)
 	assert.NotEqual(t, string(in), string(out))
 
