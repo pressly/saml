@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/pressly/saml"
-	"github.com/pressly/saml/middleware/sp"
+	"github.com/goware/saml"
+	"github.com/goware/saml/middleware/sp"
 )
 
 var (

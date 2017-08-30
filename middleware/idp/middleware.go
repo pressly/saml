@@ -31,7 +31,7 @@ import (
 	"net/http"
 	"text/template"
 
-	"github.com/pressly/saml"
+	"github.com/goware/saml"
 )
 
 // Middleware represents a middleware that provides tools for implementing a

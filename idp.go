@@ -33,7 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pressly/saml/xmlsec"
+	"github.com/goware/saml/xmlsec"
 )
 
 // Session represents a user session. It is returned by the

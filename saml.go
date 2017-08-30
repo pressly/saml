@@ -31,7 +31,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pressly/saml/xmlsec"
+	"github.com/goware/saml/xmlsec"
 	"github.com/satori/go.uuid"
 )
 

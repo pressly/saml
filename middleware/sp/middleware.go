@@ -34,8 +34,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/pressly/saml"
-	"github.com/pressly/saml/xmlsec"
+	"github.com/goware/saml"
+	"github.com/goware/saml/xmlsec"
 )
 
 // AccessFunction is a function that returns an HTTP handler that is called

@@ -26,7 +26,7 @@
 package idp
 
 import (
-	"github.com/pressly/saml"
+	"github.com/goware/saml"
 	"net/http"
 )
 

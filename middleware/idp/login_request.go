@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"text/template"
 
-	"github.com/pressly/saml"
+	"github.com/goware/saml"
 )
 
 // LoginRequest represents a login request that the IdP creates in order to try

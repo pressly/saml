@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	"github.com/pressly/chi"
-	"github.com/pressly/saml"
-	"github.com/pressly/saml/middleware/idp"
+	"github.com/goware/saml"
+	"github.com/goware/saml/middleware/idp"
 
 	"time"
 )

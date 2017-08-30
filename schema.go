@@ -28,7 +28,7 @@ import (
 	"encoding/xml"
 	"time"
 
-	"github.com/pressly/saml/xmlsec"
+	"github.com/goware/saml/xmlsec"
 )
 
 // AuthnRequest represents the SAML object of the same name, a request from a service provider
