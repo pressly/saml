@@ -7,14 +7,16 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/pressly/chi"
 	"github.com/goware/saml"
 	"github.com/goware/saml/middleware/idp"
+	"github.com/pressly/chi"
 
 	"time"
 )
 
 var (
+	flagInitiatedBy = flag.String("initiated-by", "", "Either idp or sp")
+
 	flagListenAddr = flag.String("listen-addr", "127.0.0.1:1117", "Bind to this address")
 	flagPublicURL  = flag.String("public-url", "http://127.0.0.1:1117", "Service's public URL")
 
@@ -30,7 +32,9 @@ var (
 )
 
 const (
-	requestPath = "/request"
+	metadataPath = "/metadata.xml"
+	ssoPath      = "/idp/sso"
+	initiatePath = "/idp/initiate"
 )
 
 type user struct {
@@ -106,7 +110,7 @@ func displayLoginForm(w http.ResponseWriter, r *http.Request) {
 		</head>
 		<body>
 			<h2>Select SP</h2>
-			<form action="` + *flagPublicURL + requestPath + `">
+			<form action="` + *flagPublicURL + initiatePath + `">
 				<select name="metadata_url">
 					<option value="">(Choose one)</option>
 					<option value="` + *flagMetadataURL + `">` + *flagMetadataURL + `</option>
@@ -128,8 +132,25 @@ func logHandler(next http.Handler) http.Handler {
 }
 
 func main() {
-
 	flag.Parse()
+
+	if (flagHelp != nil && *flagHelp) || flagInitiatedBy == nil {
+		flag.PrintDefaults()
+		return
+	}
+
+	if flagListenAddr == nil || flagEntityID == nil || flagMetadataURL == nil {
+		flag.PrintDefaults()
+		return
+	}
+
+	switch *flagInitiatedBy {
+	case "idp":
+	case "sp":
+	default:
+		flag.PrintDefaults()
+		return
+	}
 
 	if (flagHelp != nil && *flagHelp) ||
 		flagListenAddr == nil ||
@@ -146,11 +167,6 @@ func main() {
 	if flagPrivKey == nil || *flagPrivKey == "" {
 		log.Fatal("Missing -privkey-pem")
 	}
-
-	const (
-		metadataPath = "/metadata.xml"
-		ssoPath      = "/idp/sso"
-	)
 
 	identityProvider := saml.IdentityProvider{
 		CertFile: *flagPubCert,
@@ -172,10 +188,17 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get("/idp-initiated-sso", displayLoginForm)
 	r.Get(metadataPath, middleware.ServeMetadata)
-	r.Get(requestPath, initiateLogin(middleware))
 
-	log.Printf("Test IdP server listening at %s", *flagListenAddr)
+	log.Printf("Test IdP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
+	switch *flagInitiatedBy {
+	case "idp":
+		r.Get("/", displayLoginForm)
+		r.Get(initiatePath, initiateLogin(middleware))
+		log.Printf("Go to %s to begin the IdP initiated login.", *flagPublicURL)
+	case "sp":
+		r.Get(ssoPath, middleware.ServeSSO(authFn))
+	}
+
 	log.Fatal(http.ListenAndServe(*flagListenAddr, r))
 }

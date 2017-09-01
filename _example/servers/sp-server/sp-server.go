@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	flagListenAddr = flag.String("listen-addr", "127.0.0.1:1113", "Bind to address")
-	flagPublicURL  = flag.String("public-url", "http://127.0.0.1:1113", "Service's public URL")
+	flagInitiatedBy = flag.String("initiated-by", "", "Either idp or sp")
+	flagListenAddr  = flag.String("listen-addr", "127.0.0.1:1113", "Bind to address")
+	flagPublicURL   = flag.String("public-url", "http://127.0.0.1:1113", "Service's public URL")
 
 	flagMetadataURL = flag.String("idp-metadata-url", "http://127.0.0.1:1117/metadata.xml", "IdP's metadata URL")
 	flagRelayState  = flag.String("relay-state", "", "Relay state")
@@ -25,8 +26,19 @@ var (
 	flagHelp = flag.Bool("help", false, "Display help")
 )
 
+const (
+	metadataPath = "/metadata.xml"
+	acsPath      = "/saml/acs"
+)
+
 func accessGranted(assertion *saml.Assertion) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+
+		relayState := r.Form.Get("RelayState")
+
+		log.Printf("Login OK, RelayState: %v", relayState)
+
 		claims := map[string]interface{}{}
 		for _, attr := range assertion.AttributeStatement.Attributes {
 			values := []string{}
@@ -44,24 +56,36 @@ func accessGranted(assertion *saml.Assertion) func(http.ResponseWriter, *http.Re
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		w.Write(buf)
 	}
 }
 
-func loggingHandler(next http.Handler) http.Handler {
+func logHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("URL: %s", r.URL.String())
-		ctx := context.WithValue(r.Context(), "saml.RelayState", *flagRelayState)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r)
 	})
+}
+
+func setRelayState(nextFn func(w http.ResponseWriter, r *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), "saml.RelayState", *flagRelayState)
+		log.Printf("Setting RelayState: %s", *flagRelayState)
+		nextFn(w, r.WithContext(ctx))
+	}
 }
 
 func main() {
 
 	flag.Parse()
 
-	if (flagHelp != nil && *flagHelp) || flagListenAddr == nil || flagPublicURL == nil || flagRelayState == nil {
+	if (flagHelp != nil && *flagHelp) || flagInitiatedBy == nil {
+		flag.PrintDefaults()
+		return
+	}
+
+	if flagListenAddr == nil || flagPublicURL == nil || flagRelayState == nil {
 		flag.PrintDefaults()
 		return
 	}
@@ -73,11 +97,6 @@ func main() {
 	if flagPrivKey == nil || *flagPrivKey == "" {
 		log.Fatal("Missing -privkey-pem")
 	}
-
-	const (
-		metadataPath = "/metadata.xml"
-		acsPath      = "/saml/acs"
-	)
 
 	serviceProvider := saml.ServiceProvider{
 		CertFile: *flagPubCert,
@@ -96,11 +115,17 @@ func main() {
 	middleware := sp.NewMiddleware(&serviceProvider)
 
 	r := chi.NewRouter()
-	r.Use(loggingHandler)
+	r.Use(logHandler)
 
 	r.Get(metadataPath, middleware.ServeMetadata)
 	r.Post(acsPath, middleware.ServeAcs(accessGranted))
 
-	log.Printf("Test SP server listening at %s", *flagListenAddr)
+	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
+	switch *flagInitiatedBy {
+	case "sp":
+		r.Get("/", setRelayState(middleware.ServeRequestAuth))
+		log.Printf("Go to %s to begin the SP initiated login.", *flagPublicURL)
+	}
+
 	log.Fatal(http.ListenAndServe(*flagListenAddr, r))
 }

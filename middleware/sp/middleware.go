@@ -61,67 +61,60 @@ func NewMiddleware(sp *saml.ServiceProvider) *Middleware {
 
 // ServeRequestAuth creates an authentication assert and makes the user send it
 // to the IdP (via redirection).
-func (m *Middleware) ServeRequestAuth(authFn AuthFunction, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+func (m *Middleware) ServeRequestAuth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-		if authFn(w, r) {
-			handler(w, r)
-			return
-		}
-
-		destination, err := m.sp.GetIdPAuthResource()
-		if err != nil {
-			saml.Logf("GetIdPAuthResource: %v", err)
-			internalErr(w, err)
-			return
-		}
-
-		authnRequest, err := m.sp.MakeAuthenticationRequest(destination)
-		if err != nil {
-			saml.Logf("Failed to make auth request to %v: %v", destination, err)
-			internalErr(w, err)
-			return
-		}
-
-		buf, err := xml.MarshalIndent(authnRequest, "", "\t")
-		if err != nil {
-			saml.Logf("Failed to marshal auth request %v", err)
-			internalErr(w, err)
-			return
-		}
-
-		// RelayState is an opaque string that can be used to keep track of this
-		// session on our side.
-		var relayState string
-		token := ctx.Value("saml.RelayState")
-		if token != nil {
-			relayState, _ = token.(string)
-		}
-
-		fbuf := bytes.NewBuffer(nil)
-		fwri, err := flate.NewWriter(fbuf, flate.DefaultCompression)
-		if err != nil {
-			saml.Logf("Failed to build buffer %v", err)
-			internalErr(w, err)
-			return
-		}
-
-		_, err = fwri.Write(buf)
-		if err != nil {
-			saml.Logf("Failed to write to buffer %v", err)
-			internalErr(w, err)
-			return
-		}
-		fwri.Close()
-		message := base64.StdEncoding.EncodeToString(fbuf.Bytes())
-
-		redirectURL := fmt.Sprintf(`%s?RelayState=%s&SAMLRequest=%s`, destination, url.QueryEscape(relayState), url.QueryEscape(message))
-
-		w.Header().Add("Location", redirectURL)
-		w.WriteHeader(http.StatusFound)
+	destination, err := m.sp.GetIdPAuthResource()
+	if err != nil {
+		saml.Logf("GetIdPAuthResource: %v", err)
+		internalErr(w, err)
 		return
 	}
+
+	authnRequest, err := m.sp.MakeAuthenticationRequest(destination)
+	if err != nil {
+		saml.Logf("Failed to make auth request to %v: %v", destination, err)
+		internalErr(w, err)
+		return
+	}
+
+	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
+	if err != nil {
+		saml.Logf("Failed to marshal auth request %v", err)
+		internalErr(w, err)
+		return
+	}
+
+	// RelayState is an opaque string that can be used to keep track of this
+	// session on our side.
+	var relayState string
+	token := ctx.Value("saml.RelayState")
+	if token != nil {
+		relayState, _ = token.(string)
+	}
+
+	fbuf := bytes.NewBuffer(nil)
+	fwri, err := flate.NewWriter(fbuf, flate.DefaultCompression)
+	if err != nil {
+		saml.Logf("Failed to build buffer %v", err)
+		internalErr(w, err)
+		return
+	}
+
+	_, err = fwri.Write(buf)
+	if err != nil {
+		saml.Logf("Failed to write to buffer %v", err)
+		internalErr(w, err)
+		return
+	}
+	fwri.Close()
+	message := base64.StdEncoding.EncodeToString(fbuf.Bytes())
+
+	redirectURL := destination + fmt.Sprintf(`?RelayState=%s&SAMLRequest=%s`, url.QueryEscape(relayState), url.QueryEscape(message))
+
+	w.Header().Add("Location", redirectURL)
+	w.WriteHeader(http.StatusFound)
+	return
 }
 
 // ServeMetadata creates and serves a metadata XML file.
