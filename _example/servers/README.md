@@ -1,0 +1,100 @@
+# IdP and SP servers
+
+The `saml` package includes two servers that can be used as minimal examples
+for building SP and IdP servers that can follow the IdP-initiated and
+SP-initiated sequences.
+
+In order to use these servers you'll need a certificate and a passwordless
+private key. You can generate the proper keys with `openssl`:
+
+```
+openssl req -x509 \
+  -newkey rsa:4096 \
+  -keyout test.key.enc \
+  -out test.crt \
+  -days 3650 \
+  -subj "/C=CA/ST=Ontario/L=Toronto/O=Pressly/OU=Org/CN=www.pressly.com"
+
+openssl rsa -in test.key.enc -out test.key
+```
+
+You'll need two keypairs, one for the SP and the other for the IdP.
+
+Don't use the above command for creating keypairs for production use, this is
+only for testing.
+
+Once you have both keypairs install the `idp-server` tool:
+
+```
+go install github.com/goware/saml/_example/servers/idp-server
+```
+
+and the `sp-server` tool:
+
+```
+go install github.com/goware/saml/_example/servers/sp-server
+```
+
+## Testing IdP-initiated SSO
+
+The [IdP-initiated
+SSO](http://saml.xml.org/wiki/idp-initiated-single-sign-on-post-binding) is a
+SSO sequence that begins with the identity provider sending an unsolicited
+request to a service provider.
+
+In order to simulate said sequence, run the `idp-server` and `sp-server`
+commands like this:
+
+```
+idp-server \
+  -listen-addr 127.0.0.1:1117 \
+  -public-url http://127.0.0.1:1117 \
+  -pubkey-cert-pem /path/to/idp.crt \
+  -privkey-pem /path/to/idp.key \
+  -sp-metadata-url http://127.0.0.1:1113/metadata.xml \
+  -initiated-by idp
+```
+
+```
+sp-server \
+  -listen-addr 127.0.0.1:1113 \
+  -public-url http://127.0.0.1:1113 \
+  -pubkey-cert-pem /path/to/sp.crt \
+  -privkey-pem /path/to/sp.key \
+  -idp-metadata-url http://127.0.0.1:1117/metadata.xml \
+  -initiated-by idp
+```
+
+Then go to the IdP server's public address to begin the login process.
+
+## SP-initiated SSP
+
+The [SP-initiated
+SSO](http://saml.xml.org/wiki/sp-initiated-single-sign-on-postartifact-bindings)
+is a SSO sequence where the service provider redirects the user to the identity
+provider to log in.
+
+In order to simulate said sequence, run the `idp-server` and `sp-server`
+commands like this:
+
+```
+idp-server \
+  -listen-addr 127.0.0.1:1117 \
+  -public-url http://127.0.0.1:1117 \
+  -pubkey-cert-pem /path/to/idp.crt \
+  -privkey-pem /path/to/idp.key \
+  -sp-metadata-url http://127.0.0.1:1113/metadata.xml \
+  -initiated-by sp
+```
+
+```
+sp-server \
+  -listen-addr 127.0.0.1:1113 \
+  -public-url http://127.0.0.1:1113 \
+  -pubkey-cert-pem /path/to/sp.crt \
+  -privkey-pem /path/to/sp.key \
+  -idp-metadata-url http://127.0.0.1:1117/metadata.xml \
+  -initiated-by sp
+```
+
+Then go to the SP server's public address to begin the login process.
