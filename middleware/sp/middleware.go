@@ -31,6 +31,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -271,16 +272,17 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 				"urn:oasis:names:tc:SAML:2.0:protocol:Response",
 				"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
 			}
+			log.Printf("assertionErr")
 
-			assertion = nil
+			assertion = res.Assertion
 			for _, idAttr := range idAttrs {
-				if err := xmlsec.Verify(samlResponseXML, idpCertFile, idAttr); err != nil {
+				err := xmlsec.Verify(samlResponseXML, idpCertFile, idAttr)
+				log.Printf("idAttr: %v: %v", idAttr, err)
+				if err != nil {
 					if saml.IsSecurityException(err, &m.sp.SecurityOpts) {
 						assertionErr = err
-						continue
+						break
 					}
-					assertion, assertionErr = res.Assertion, nil
-					break
 				}
 			}
 
