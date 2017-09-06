@@ -96,10 +96,10 @@ type IdentityProvider struct {
 // PrivkeyFile returns a physical path where the IdP's key can be accessed.
 func (idp *IdentityProvider) PrivkeyFile() (string, error) {
 	if idp.KeyFile != "" {
-		return validateKeyFile(idp.KeyFile, nil)
+		return idp.KeyFile, nil
 	}
 	if idp.PrivkeyPEM != "" {
-		return validateKeyFile(writeFile([]byte(idp.PrivkeyPEM)))
+		return writeFile([]byte(idp.PrivkeyPEM))
 	}
 	return "", errors.New("No private key given.")
 }

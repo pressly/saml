@@ -58,10 +58,10 @@ type ServiceProvider struct {
 // PrivkeyFile returns a physical path where the SP's key can be accessed.
 func (sp *ServiceProvider) PrivkeyFile() (string, error) {
 	if sp.KeyFile != "" {
-		return validateKeyFile(sp.KeyFile, nil)
+		return sp.KeyFile, nil
 	}
 	if sp.PrivkeyPEM != "" {
-		return validateKeyFile(writeFile([]byte(sp.PrivkeyPEM)))
+		return writeFile([]byte(sp.PrivkeyPEM))
 	}
 	return "", errors.New("No private key given.")
 }
