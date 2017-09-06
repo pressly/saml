@@ -85,6 +85,10 @@ func (sp *ServiceProvider) GetIdPAuthResource() (string, error) {
 		return "", err
 	}
 
+	if meta.IDPSSODescriptor == nil {
+		return "", errors.New("could not find IDPSSODescriptor")
+	}
+
 	for _, endpoint := range meta.IDPSSODescriptor.SingleSignOnService {
 		if endpoint.Binding == "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" {
 			return endpoint.Location, nil
@@ -94,7 +98,7 @@ func (sp *ServiceProvider) GetIdPAuthResource() (string, error) {
 		}
 	}
 
-	return "", errors.New("Could not find resource")
+	return "", errors.New("could not find SingleSignOnService")
 }
 
 // GetIdPCertFile returns a physical path where the IdP certificate can be
