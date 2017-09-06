@@ -1,5 +1,7 @@
 # saml
 
+[![Build Status](https://travis-ci.org/goware/saml.svg?branch=master)](https://travis-ci.org/goware/saml)
+
 Package `saml` provides tools and middleware for implementing [SAML based single
 sign-on](https://auth0.com/blog/how-saml-authentication-works/).
 
