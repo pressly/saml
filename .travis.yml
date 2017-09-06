@@ -8,7 +8,8 @@ go:
   - "1.9"
 
 install:
-  sudo apt-get install -y xmlsec1
+  - sudo apt-get install -y xmlsec1
+  - go get -d -t ./...
 
 script:
   - go test -v ./...
