@@ -12,10 +12,11 @@ See
 [_example/servers](https://github.com/goware/saml/tree/master/_example/servers)
 for example implementations of IdP and SP servers.
 
-## License
+## License
 
-> MIT License
->
+Code that is not based on previous Open Source work is released under the MIT
+license:
+
 > Copyright (c) 2017 Pressly Inc.
 >
 > Permission is hereby granted, free of charge, to any person obtaining a copy
