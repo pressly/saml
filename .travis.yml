@@ -1,0 +1,14 @@
+notifications:
+  email: false
+
+language: go
+
+go:
+  - "1.8"
+  - "1.9"
+
+install:
+  apt-get install -y xmlsec1
+
+script:
+  - go test -v ./...
