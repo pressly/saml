@@ -28,7 +28,8 @@ import (
 	"os"
 )
 
-// WorkDir is a temporary directory for files.
+// WorkDir is a temporary directory for files. We need to write keys to disk in
+// order for xmlsec1 to pick them and use them.
 var WorkDir = "/tmp"
 
 func writeFile(buf []byte) (string, error) {
