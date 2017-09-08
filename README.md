@@ -12,6 +12,46 @@ See
 [_example/servers](https://github.com/goware/saml/tree/master/_example/servers)
 for example implementations of IdP and SP servers.
 
+## SAML SSO basics
+
+![SAML SSO process](https://user-images.githubusercontent.com/385670/30191334-d6ebe85e-9405-11e7-9e61-5d1cd7b47355.png)
+
+### IdP initiated SSO
+
+1. An user selects a service provider (SP) to log in via SSO, a typical use
+   case for this is a login button on an intranet.
+1. The user is asked by their login details (if not within a session yet).
+1. The IdP creates an payload (`AuthnRequest`) containing the user information
+   and signs it.
+1. The IdP forces the user to submit the signed request to the SP they
+   selected. This is typically done via a FORM that is auto-submitted via JavaScript.
+1. The SP receives the message and determines if the signature is valid, among
+   other details.
+1. If the SP decides to trust the message, it can decode the payload with is
+   expected to contain user information, such as e-mail address, unique ID and
+   name details.
+1. The SP uses the payload and provides access to the user.
+
+### SP initiated SSO
+
+1. An user tries to access a restricted URL at a SP.
+1. The SP looks up the IdP that matches the private resource and redirects the
+   user to a special IdP page. The original URL is passed as a `RelayState`
+   parameter.
+1. The user is asked by their login details.
+1. The IdP creates an payload (`AuthnRequest`) containing the user information
+   and signs it.
+1. The IdP forces the user to submit the signed request to the SP they
+   selected. This is typically done via a FORM that is auto-submitted via JavaScript.
+1. The SP receives the message and determines if the signature is valid, among
+   other details.
+1. If the SP decides to trust the message, it can decode the payload with is
+   expected to contain user information, such as e-mail address, unique ID and
+   name details.
+1. The SP uses the payload, provides access to the user and follows the
+   `RelayState` URL.
+1. The user gets access to the restricted URL.
+
 ## License
 
 Code that is not based on previous Open Source work is released under the MIT
