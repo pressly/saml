@@ -7,14 +7,16 @@ import (
 	"compress/flate"
 	"encoding/base64"
 	"encoding/xml"
-	"errors"
 	"fmt"
-	"log"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/goware/saml"
 	"github.com/goware/saml/xmlsec"
+	"github.com/pkg/errors"
 )
 
 // AccessFunction is a function that returns an HTTP handler that is called
@@ -28,6 +30,22 @@ type AuthFunction func(http.ResponseWriter, *http.Request) bool
 // Middleware represents a SP middleware.
 type Middleware struct {
 	sp *saml.ServiceProvider
+}
+
+func parseFormAndKeepBody(r *http.Request) error {
+	var buf bytes.Buffer
+
+	// Fill buf while reading r.Body
+	r.Body = ioutil.NopCloser(io.TeeReader(r.Body, &buf))
+
+	// ParseForm reads all data from r.Body and empties it because it's a buffer.
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
+
+	// Restore body so it can be read again.
+	r.Body = ioutil.NopCloser(&buf)
+	return nil
 }
 
 // NewMiddleware creates a middleware based on the given service provider.
@@ -45,22 +63,19 @@ func (m *Middleware) ServeRequestAuth(w http.ResponseWriter, r *http.Request) {
 
 	destination, err := m.sp.GetIdPAuthResource()
 	if err != nil {
-		saml.Logf("GetIdPAuthResource: %v", err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("GetIdPAuthResource: %v", err))
 		return
 	}
 
 	authnRequest, err := m.sp.MakeAuthenticationRequest(destination)
 	if err != nil {
-		saml.Logf("Failed to make auth request to %v: %v", destination, err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("Failed to make auth request to %v: %v", destination, err))
 		return
 	}
 
 	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
 	if err != nil {
-		saml.Logf("Failed to marshal auth request %v", err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("Failed to marshal auth request %v", err))
 		return
 	}
 
@@ -75,15 +90,13 @@ func (m *Middleware) ServeRequestAuth(w http.ResponseWriter, r *http.Request) {
 	fbuf := bytes.NewBuffer(nil)
 	fwri, err := flate.NewWriter(fbuf, flate.DefaultCompression)
 	if err != nil {
-		saml.Logf("Failed to build buffer %v", err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("Failed to build buffer %v", err))
 		return
 	}
 
 	_, err = fwri.Write(buf)
 	if err != nil {
-		saml.Logf("Failed to write to buffer %v", err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("Failed to write to buffer %v", err))
 		return
 	}
 	fwri.Close()
@@ -100,14 +113,12 @@ func (m *Middleware) ServeRequestAuth(w http.ResponseWriter, r *http.Request) {
 func (m *Middleware) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	metadata, err := m.sp.Metadata()
 	if err != nil {
-		saml.Logf("Failed to build metadata %v", err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("Failed to build metadata %v", err))
 		return
 	}
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	if err != nil {
-		saml.Logf("Failed to format metadata %v", err)
-		internalErr(w, err)
+		internalErr(w, errors.Errorf("Failed to format metadata %v", err))
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf8")
@@ -130,7 +141,9 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 	return func(w http.ResponseWriter, r *http.Request) {
 		now := saml.Now()
 
-		r.ParseForm()
+		if err := parseFormAndKeepBody(r); err != nil {
+			clientErr(w, r, errors.Wrap(err, "Unable to read POST data"))
+		}
 
 		samlResponse := r.Form.Get("SAMLResponse")
 
@@ -145,8 +158,8 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 
 		samlResponseXML, err := base64.StdEncoding.DecodeString(samlResponse)
 		if err != nil {
-			saml.Logf("Failed to decode SAMLResponse %v", err)
-			clientErr(w, err, errors.New("Malformed payload"))
+			err = errors.Wrapf(err, "could not decode base64 payload: %s", samlResponse)
+			clientErr(w, r, errors.Wrap(err, "Malformed payload"))
 			return
 		}
 
@@ -155,38 +168,42 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		var res saml.Response
 		err = xml.Unmarshal(samlResponseXML, &res)
 		if err != nil {
-			saml.Logf("Failed to unmarshal SAMLResponse %v", err)
-			clientErr(w, err, errors.New("Malformed XML"))
+			err = errors.Wrapf(err, "could not unmarshal XML document: %s", string(samlResponseXML))
+			clientErr(w, r, errors.Wrap(err, "Malformed XML"))
 			return
 		}
 
 		_, err = m.sp.GetIdPMetadata()
 		if err != nil {
-			clientErr(w, fmt.Errorf("Unable to get metadata: %v", err), errors.New("Unable to get metadata"))
+			clientErr(w, r, errors.Wrap(err, "unable to retrieve IdP metadata"))
 			return
 		}
 
 		// Validate message.
 
 		if res.Destination != m.sp.AcsURL {
-			clientErr(w, fmt.Errorf("Wrong ACS destination, expecting %q, got %q", m.sp.AcsURL, res.Destination), errors.New("Wrong ACS destination"))
+			err := errors.Errorf("Wrong ACS destination, expecting %q, got %q", m.sp.AcsURL, res.Destination)
+			clientErr(w, r, errors.Wrap(err, "Wrong ACS destination"))
 			return
 		}
 
 		if res.IssueInstant.Add(saml.MaxIssueDelay).Before(now) {
-			clientErr(w, fmt.Errorf("IssueInstant expired, got %v, current time is %v", res.IssueInstant, now), errors.New("IssueInstant expired"))
+			err := errors.Errorf("IssueInstant expired, got %v, current time is %v", res.IssueInstant, now)
+			clientErr(w, r, errors.Wrap(err, "IssueInstant expired"))
 			return
 		}
 
 		if m.sp.IdPMetadata.EntityID != "" {
 			if res.Issuer.Value != m.sp.IdPMetadata.EntityID {
-				clientErr(w, fmt.Errorf("Issuer %q does not match expected entity ID %q", res.Issuer.Value, m.sp.IdPMetadata.EntityID), errors.New("Issuer does not match expected entity ID"))
+				err := errors.Errorf("Issuer %q does not match expected entity ID %q", res.Issuer.Value, m.sp.IdPMetadata.EntityID)
+				clientErr(w, r, errors.Wrap(err, "Issuer does not match expected entity ID"))
 				return
 			}
 		}
 
 		if res.Status.StatusCode.Value != "urn:oasis:names:tc:SAML:2.0:status:Success" {
-			clientErr(w, errors.New("Unexpected status code"), nil)
+			err := errors.Errorf("Unexpected status code: %v", res.Status.StatusCode.Value)
+			clientErr(w, r, errors.Wrap(err, "Unexpected status code"))
 			return
 		}
 
@@ -201,15 +218,15 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			expectedResponse = true
 		}
 		if !expectedResponse && len(responseIDs) > 0 {
-			clientErr(w, fmt.Errorf("Expecting a proper InResponseTo value, got %#v", responseIDs), nil)
+			err := errors.Errorf("Expecting a proper InResponseTo value, got %#v", responseIDs)
+			clientErr(w, r, err)
 			return
 		}
 
 		// Message verification.
 		idpCertFile, err := m.sp.GetIdPCertFile()
 		if err != nil {
-			saml.Logf("Failed to get IDP cert: %v", err)
-			internalErr(w, err)
+			internalErr(w, errors.Errorf("Failed to get private key: %v", err))
 			return
 		}
 
@@ -217,30 +234,29 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		if res.EncryptedAssertion != nil {
 			keyFile, err := m.sp.PrivkeyFile()
 			if err != nil {
-				saml.Logf("Failed to get private key: %v", err)
-				internalErr(w, err)
+				internalErr(w, errors.Errorf("Failed to get private key: %v", err))
 				return
 			}
 
 			plainTextAssertion, err := xmlsec.Decrypt(res.EncryptedAssertion.EncryptedData, keyFile)
 			if err != nil {
 				if saml.IsSecurityException(err, &m.sp.SecurityOpts) {
-					clientErr(w, err, errors.New("Unable to decrypt message"))
+					clientErr(w, r, errors.Wrap(err, "Unable to decrypt message"))
 					return
 				}
 			}
 
 			if err := xmlsec.Verify(plainTextAssertion, idpCertFile, "urn:oasis:names:tc:SAML:2.0:assertion:Assertion"); err != nil {
 				if saml.IsSecurityException(err, &m.sp.SecurityOpts) {
-					saml.Logf("Failed to decrypt assertion: %q", plainTextAssertion)
-					clientErr(w, err, errors.New("Unabe to verify assertion"))
+					err = errors.Wrapf(err, "Failed to decrypt assertion: %q", plainTextAssertion)
+					clientErr(w, r, errors.Wrap(err, "Unable to verify assertion"))
 					return
 				}
 			}
 
 			assertion = &saml.Assertion{}
 			if err := xml.Unmarshal(plainTextAssertion, assertion); err != nil {
-				clientErr(w, err, errors.New("Unable to parse assertion"))
+				clientErr(w, r, errors.Wrap(err, "Unable to parse assertion"))
 				return
 			}
 		} else {
@@ -250,28 +266,34 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 				"urn:oasis:names:tc:SAML:2.0:protocol:Response",
 				"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
 			}
-			log.Printf("assertionErr")
 
 			assertion = res.Assertion
 			for _, idAttr := range idAttrs {
 				err := xmlsec.Verify(samlResponseXML, idpCertFile, idAttr)
-				log.Printf("idAttr: %v: %v", idAttr, err)
-				if err != nil {
-					if saml.IsSecurityException(err, &m.sp.SecurityOpts) {
-						assertionErr = err
-						break
-					}
+				if err == nil {
+					// No error, this message is OK
+					break
 				}
+
+				// We got an error...
+				if !saml.IsSecurityException(err, &m.sp.SecurityOpts) {
+					// ...but it was not a security exception, so we ignore it and accept
+					// the verification.
+					break
+				}
+
+				// We had an error, let's try with the next ID.
+				assertionErr = err
 			}
 
 			if assertionErr != nil {
-				clientErr(w, assertionErr, errors.New("Unable to verify assertion"))
+				clientErr(w, r, errors.Wrap(assertionErr, "Unable to verify assertion"))
 				return
 			}
 		}
 
 		if assertion == nil {
-			clientErr(w, errors.New("Missing assertion"), nil)
+			clientErr(w, r, errors.New("Missing assertion"))
 			return
 		}
 
@@ -280,19 +302,22 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// Assertion's issue instant should not differ too much from the current
 		// time.
 		if assertion.IssueInstant.Add(saml.MaxIssueDelay).Before(now) {
-			clientErr(w, fmt.Errorf("Assertion expired, got %v, time is %v", assertion.IssueInstant, now), errors.New("Assertion is expired"))
+			err := errors.Errorf("Assertion expired, got %v, time is %v", assertion.IssueInstant, now)
+			clientErr(w, r, errors.Wrap(err, "Assertion is expired"))
 			return
 		}
 
 		if m.sp.IdPMetadata.EntityID != "" {
 			if assertion.Issuer.Value != m.sp.IdPMetadata.EntityID {
-				clientErr(w, fmt.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, m.sp.IdPMetadata.EntityID), errors.New("Assertion issuer does not match expected entity ID"))
+				err := errors.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, m.sp.IdPMetadata.EntityID)
+				clientErr(w, r, errors.Wrap(err, "Assertion issuer does not match expected entity ID"))
 				return
 			}
 		}
 
 		if assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != m.sp.AcsURL {
-			clientErr(w, fmt.Errorf("Unexpected assertion recipient, expecting %q, got %q", m.sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient), errors.New("Unexpected assertion recipient"))
+			err := errors.Errorf("Unexpected assertion recipient, expecting %q, got %q", m.sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
+			clientErr(w, r, errors.Wrapf(err, "Unexpected assertion recipient"))
 			return
 		}
 
@@ -306,12 +331,14 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotOnOrAfter is omitted, then it is considered unspecified.
 
 		if validFrom := assertion.Conditions.NotBefore; !validFrom.IsZero() && validFrom.After(now) {
-			clientErr(w, fmt.Errorf("Assertion conditions are not yet valid, got %v, current time is %v", validFrom, now), errors.New("Assertion conditions are not yet valid"))
+			err := errors.Errorf("Assertion conditions are not yet valid, got %v, current time is %v", validFrom, now)
+			clientErr(w, r, errors.Wrap(err, "Assertion conditions are not yet valid"))
 			return
 		}
 
 		if validUntil := assertion.Conditions.NotOnOrAfter; !validUntil.IsZero() && validUntil.Before(now) {
-			clientErr(w, fmt.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now), errors.New("Assertion conditions already expired"))
+			err := errors.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now)
+			clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 			return
 		}
 
@@ -325,7 +352,8 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotBefore MUST be less than (earlier than) the value for NotOnOrAfter.
 
 		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now) {
-			clientErr(w, fmt.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now), errors.New("Assertion conditions already expired"))
+			err := errors.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now)
+			clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 			return
 		}
 
@@ -347,7 +375,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		}
 
 		if !expectedResponse && len(responseIDs) > 0 {
-			clientErr(w, errors.New("Unexpected assertion InResponseTo value"), nil)
+			clientErr(w, r, errors.New("Unexpected assertion InResponseTo value"))
 			return
 		}
 
@@ -356,27 +384,36 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 	}
 }
 
-func clientErr(w http.ResponseWriter, privErr error, publicErr error) {
-	saml.Logf("clientErr: private: %v, public: %v", privErr, publicErr)
-	if publicErr == nil {
-		publicErr = privErr
+func publicErrorMessage(err error) string {
+	// is there any better way to retrieve the error _message_ without the cause?
+	msg := err.Error()
+	parts := strings.SplitN(msg, ":", 2)
+	if len(parts) > 0 {
+		return parts[0]
 	}
+	return msg
+}
+
+func clientErr(w http.ResponseWriter, r *http.Request, err error) {
+	publicError := publicErrorMessage(err)
+
+	report := saml.InspectRequest(r)
+
+	saml.Fatal(errors.Wrapf(err, "failed request: %s", report.String()))
+
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusBadRequest)
-	w.Write([]byte(publicErr.Error()))
+	w.Write([]byte(publicError))
 }
 
 func internalErr(w http.ResponseWriter, err error) {
-	saml.Logf("internalErr: %v", err)
-	serverErr(w, err, errors.New("An internal error ocurred, please try again."))
+	serverErr(w, errors.Wrap(err, "an internal error ocurred, please try again"))
 }
 
-func serverErr(w http.ResponseWriter, privErr error, publicErr error) {
-	saml.Logf("serverErr: private: %v, public: %v", privErr, publicErr)
-	if publicErr == nil {
-		publicErr = privErr
-	}
+func serverErr(w http.ResponseWriter, err error) {
+	saml.Fatal(err)
+
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(publicErr.Error()))
+	w.Write([]byte(publicErrorMessage(err)))
 }

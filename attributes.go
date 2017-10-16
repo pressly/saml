@@ -7,7 +7,15 @@ type AttributesMap map[string][]string
 // NewAttributesMap creates an attribute map given a third party assertion.
 func NewAttributesMap(assertion *Assertion) *AttributesMap {
 	props := make(AttributesMap)
-	if assertion != nil && assertion.AttributeStatement != nil {
+	if assertion == nil {
+		return &props
+	}
+
+	if assertion.Subject != nil && assertion.Subject.NameID != nil {
+		props[assertion.Subject.NameID.Format] = []string{assertion.Subject.NameID.Value}
+	}
+
+	if assertion.AttributeStatement != nil {
 		for _, attr := range assertion.AttributeStatement.Attributes {
 			values := []string{}
 			for _, value := range attr.Values {
@@ -19,7 +27,9 @@ func NewAttributesMap(assertion *Assertion) *AttributesMap {
 			}
 			props[key] = values
 		}
+		return &props
 	}
+
 	return &props
 }
 

@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"time"
 
@@ -49,11 +48,6 @@ func GetMetadata(metadataURL string) (*Metadata, error) {
 	}
 
 	return &metadata, nil
-}
-
-// Logf prints log messages to stdout.
-func Logf(format string, v ...interface{}) {
-	log.Printf("saml: "+format, v...)
 }
 
 // SecurityOpts allows to bypass some security checks.
