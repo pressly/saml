@@ -13,9 +13,13 @@ import (
 
 const defaultValidDuration = time.Hour * 24 * 2
 
-// MaxIssueDelay is the maximum timeframe where an assertion can be considered
-// valid.
-const MaxIssueDelay = time.Second * 90
+// IssueLifetime is the maximum timeframe where an assertion can be considered
+// valid by the receptor.
+const IssueLifetime = time.Second * 90
+
+// TimeTolerance is added or substracted to the current time to give some
+// tolerance to assertion's NotBefore and NotOnOrAfter
+var TimeTolerance = time.Second * 60
 
 // Now is a function that returns the current time. This vale can be
 // overwritten during tests.

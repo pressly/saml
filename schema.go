@@ -70,8 +70,9 @@ type NameIDPolicy struct {
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
 type Response struct {
-	XMLName            xml.Name  `xml:"urn:oasis:names:tc:SAML:2.0:protocol Response"`
-	Destination        string    `xml:",attr"`
+	XMLName            xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol Response"`
+	Destination        string   `xml:",attr"`
+	Signature          *xmlsec.Signature
 	ID                 string    `xml:",attr"`
 	InResponseTo       string    `xml:",attr"`
 	IssueInstant       time.Time `xml:",attr"`
