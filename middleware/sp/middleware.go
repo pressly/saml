@@ -187,12 +187,6 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			return
 		}
 
-		if res.IssueInstant.Add(saml.MaxIssueDelay).Before(now) {
-			err := errors.Errorf("IssueInstant expired, got %v, current time is %v", res.IssueInstant, now)
-			clientErr(w, r, errors.Wrap(err, "IssueInstant expired"))
-			return
-		}
-
 		if m.sp.IdPMetadata.EntityID != "" {
 			if res.Issuer.Value != m.sp.IdPMetadata.EntityID {
 				err := errors.Errorf("Issuer %q does not match expected entity ID %q", res.Issuer.Value, m.sp.IdPMetadata.EntityID)
@@ -298,15 +292,6 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		}
 
 		// Validate assertion.
-
-		// Assertion's issue instant should not differ too much from the current
-		// time.
-		if assertion.IssueInstant.Add(saml.MaxIssueDelay).Before(now) {
-			err := errors.Errorf("Assertion expired, got %v, time is %v", assertion.IssueInstant, now)
-			clientErr(w, r, errors.Wrap(err, "Assertion is expired"))
-			return
-		}
-
 		if m.sp.IdPMetadata.EntityID != "" {
 			if assertion.Issuer.Value != m.sp.IdPMetadata.EntityID {
 				err := errors.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, m.sp.IdPMetadata.EntityID)
@@ -329,17 +314,22 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// begins. The NotOnOrAfter attribute specifies the time instant at which
 		// the validity interval has ended. If the value for either NotBefore or
 		// NotOnOrAfter is omitted, then it is considered unspecified.
-
-		if validFrom := assertion.Conditions.NotBefore; !validFrom.IsZero() && validFrom.After(now) {
-			err := errors.Errorf("Assertion conditions are not yet valid, got %v, current time is %v", validFrom, now)
-			clientErr(w, r, errors.Wrap(err, "Assertion conditions are not yet valid"))
-			return
+		{
+			validFrom := assertion.Conditions.NotBefore
+			if !validFrom.IsZero() && validFrom.After(now.Add(saml.TimeTolerance)) {
+				err := errors.Errorf("Assertion conditions are not valid yet, got %v, current time is %v", validFrom, now)
+				clientErr(w, r, errors.Wrap(err, "Assertion conditions are not valid yet"))
+				return
+			}
 		}
 
-		if validUntil := assertion.Conditions.NotOnOrAfter; !validUntil.IsZero() && validUntil.Before(now) {
-			err := errors.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now)
-			clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
-			return
+		{
+			validUntil := assertion.Conditions.NotOnOrAfter
+			if !validUntil.IsZero() && validUntil.Before(now.Add(-saml.TimeTolerance)) {
+				err := errors.Errorf("Assertion conditions already expired, got %v current time is %v, extra time is %v", validUntil, now, now.Add(-saml.TimeTolerance))
+				clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
+				return
+			}
 		}
 
 		// A time instant at which the subject can no longer be confirmed. The time
@@ -351,7 +341,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotOnOrAfter attributes. If both attributes are present, the value for
 		// NotBefore MUST be less than (earlier than) the value for NotOnOrAfter.
 
-		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now) {
+		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now.Add(-saml.TimeTolerance)) {
 			err := errors.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now)
 			clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 			return

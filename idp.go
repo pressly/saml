@@ -328,7 +328,7 @@ func (req *IdpAuthnRequest) MakeAssertion(session *Session) error {
 				SubjectConfirmationData: SubjectConfirmationData{
 					Address:      req.HTTPRequest.RemoteAddr,
 					InResponseTo: req.Request.ID,
-					NotOnOrAfter: Now().Add(MaxIssueDelay),
+					NotOnOrAfter: Now().Add(IssueLifetime),
 					Recipient: func() string {
 						switch {
 						case req.ACSEndpoint != nil:
@@ -349,7 +349,7 @@ func (req *IdpAuthnRequest) MakeAssertion(session *Session) error {
 		},
 		Conditions: &Conditions{
 			NotBefore:    Now(),
-			NotOnOrAfter: Now().Add(MaxIssueDelay),
+			NotOnOrAfter: Now().Add(IssueLifetime),
 			AudienceRestriction: func() *AudienceRestriction {
 				if req.ServiceProviderMetadata != nil {
 					return &AudienceRestriction{
