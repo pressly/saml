@@ -316,7 +316,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotOnOrAfter is omitted, then it is considered unspecified.
 		{
 			validFrom := assertion.Conditions.NotBefore
-			if !validFrom.IsZero() && validFrom.After(now.Add(saml.TimeTolerance)) {
+			if !validFrom.IsZero() && validFrom.After(now.Add(saml.ClockDriftTolerance)) {
 				err := errors.Errorf("Assertion conditions are not valid yet, got %v, current time is %v", validFrom, now)
 				clientErr(w, r, errors.Wrap(err, "Assertion conditions are not valid yet"))
 				return
@@ -325,8 +325,8 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 
 		{
 			validUntil := assertion.Conditions.NotOnOrAfter
-			if !validUntil.IsZero() && validUntil.Before(now.Add(-saml.TimeTolerance)) {
-				err := errors.Errorf("Assertion conditions already expired, got %v current time is %v, extra time is %v", validUntil, now, now.Add(-saml.TimeTolerance))
+			if !validUntil.IsZero() && validUntil.Before(now.Add(-saml.ClockDriftTolerance)) {
+				err := errors.Errorf("Assertion conditions already expired, got %v current time is %v, extra time is %v", validUntil, now, now.Add(-saml.ClockDriftTolerance))
 				clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 				return
 			}
@@ -341,7 +341,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotOnOrAfter attributes. If both attributes are present, the value for
 		// NotBefore MUST be less than (earlier than) the value for NotOnOrAfter.
 
-		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now.Add(-saml.TimeTolerance)) {
+		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now.Add(-saml.ClockDriftTolerance)) {
 			err := errors.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now)
 			clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 			return

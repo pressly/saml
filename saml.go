@@ -17,9 +17,9 @@ const defaultValidDuration = time.Hour * 24 * 2
 // valid by the receptor.
 const IssueLifetime = time.Second * 90
 
-// TimeTolerance is added or substracted to the current time to give some
+// ClockDriftTolerance is added or substracted to the current time to give some
 // tolerance to assertion's NotBefore and NotOnOrAfter
-var TimeTolerance = time.Second * 60
+var ClockDriftTolerance = time.Duration(0)
 
 // Now is a function that returns the current time. This vale can be
 // overwritten during tests.
