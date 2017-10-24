@@ -182,6 +182,10 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// Validate message.
 
 		if res.Destination != m.sp.AcsURL {
+			// Note: OneLogin triggers this error when the Recipient field
+			// is left blank (or when not set to the correct ACS endpoint)
+			// in the OneLogin SAML configuration page. OneLogin returns
+			// Destination="{recipient}" in the SAML reponse in this case.
 			err := errors.Errorf("Wrong ACS destination, expecting %q, got %q", m.sp.AcsURL, res.Destination)
 			clientErr(w, r, errors.Wrap(err, "Wrong ACS destination"))
 			return
