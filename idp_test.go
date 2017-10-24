@@ -165,7 +165,7 @@ func TestParseAuthenticationRequest(t *testing.T) {
 	assert.NoError(t, err)
 
 	now := Now().Format(time.RFC3339Nano)
-	after := Now().Add(MaxIssueDelay).Format(time.RFC3339Nano)
+	after := Now().Add(IssueLifetime).Format(time.RFC3339Nano)
 
 	expectedOutput := `<Assertion xmlns="urn:oasis:names:tc:SAML:2.0:assertion" ID="id-MOCKID" IssueInstant="` + now + `" Version="2.0">
 	<Issuer xmlns="urn:oasis:names:tc:SAML:2.0:assertion" Format="XXX">http://localhost:1233/saml/service.xml</Issuer>
