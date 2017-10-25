@@ -1,6 +1,7 @@
 package saml
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
@@ -74,4 +75,8 @@ func IsSecurityException(err error, opts *SecurityOpts) bool {
 		}
 	}
 	return true
+}
+
+func GetAssertionFromCtx(ctx context.Context) *Assertion {
+	return ctx.Value("saml.assertion").(*Assertion)
 }
