@@ -10,8 +10,8 @@ import (
 	"text/template"
 )
 
-// ServeMetadata generates and serves the IdP's metadata.xml file.
-func (idp *IdentityProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
+// MetadataHandler generates and serves the IdP's metadata.xml file.
+func (idp *IdentityProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := idp.Metadata()
 	if err != nil {
 		Logf("Failed to generate metadata: %v", err)

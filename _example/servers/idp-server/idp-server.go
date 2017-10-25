@@ -185,7 +185,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get(metadataPath, identityProvider.ServeMetadata)
+	r.Get(metadataPath, identityProvider.MetadataHandler)
 
 	log.Printf("Test IdP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {

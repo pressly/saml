@@ -114,13 +114,13 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get(metadataPath, serviceProvider.ServeMetadata)
+	r.Get(metadataPath, serviceProvider.MetadataHandler)
 	r.Post(acsPath, serviceProvider.ServeAcs(accessGranted))
 
 	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {
 	case "sp":
-		r.Get("/", setRelayState(serviceProvider.ServeRequestAuth))
+		r.Get("/", setRelayState(serviceProvider.RequestAuthHandler))
 		log.Printf("Go to %s to begin the SP initiated login.", *flagPublicURL)
 	}
 
