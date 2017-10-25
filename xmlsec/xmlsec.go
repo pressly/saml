@@ -118,10 +118,6 @@ func Encrypt(template *EncryptedData, in []byte, publicCertPath string, method s
 // Decrypt takes an encrypted XML document and decrypts it using the given
 // private key.
 func Decrypt(in []byte, privateKeyPath string) ([]byte, error) {
-	fp, _ := os.Create("/tmp/input.txt")
-	fp.Write(in)
-	fp.Close()
-
 	// Executing command.
 	cmd := exec.Command("xmlsec1", "--decrypt",
 		"--privkey-pem", privateKeyPath,

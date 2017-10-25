@@ -228,7 +228,42 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			return
 		}
 
+		// Validate message
+
+		var validationErr error
+
+		idAttrs := []string{
+			"urn:oasis:names:tc:SAML:2.0:protocol:Response",
+			"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
+		}
+
+		for _, idAttr := range idAttrs {
+			err := xmlsec.Verify(samlResponseXML, idpCertFile, idAttr)
+			if err == nil {
+				// No error, this message is OK
+				break
+			}
+
+			// We got an error...
+			if !saml.IsSecurityException(err, &m.sp.SecurityOpts) {
+				// ...but it was not a security exception, so we ignore it and accept
+				// the verification.
+				break
+			}
+
+			// We had an error, let's try with the next ID.
+			validationErr = err
+		}
+
+		if validationErr != nil {
+			clientErr(w, r, errors.Wrap(validationErr, "Unable to verify assertion"))
+			return
+		}
+
+		// Retrieve assertion
+
 		var assertion *saml.Assertion
+
 		if res.EncryptedAssertion != nil {
 			keyFile, err := m.sp.PrivkeyFile()
 			if err != nil {
@@ -244,50 +279,13 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 				}
 			}
 
-			if err := xmlsec.Verify(plainTextAssertion, idpCertFile, "urn:oasis:names:tc:SAML:2.0:assertion:Assertion"); err != nil {
-				if saml.IsSecurityException(err, &m.sp.SecurityOpts) {
-					err = errors.Wrapf(err, "Failed to decrypt assertion: %q", plainTextAssertion)
-					clientErr(w, r, errors.Wrap(err, "Unable to verify assertion"))
-					return
-				}
-			}
-
 			assertion = &saml.Assertion{}
 			if err := xml.Unmarshal(plainTextAssertion, assertion); err != nil {
 				clientErr(w, r, errors.Wrap(err, "Unable to parse assertion"))
 				return
 			}
 		} else {
-			var assertionErr error
-
-			idAttrs := []string{
-				"urn:oasis:names:tc:SAML:2.0:protocol:Response",
-				"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
-			}
-
 			assertion = res.Assertion
-			for _, idAttr := range idAttrs {
-				err := xmlsec.Verify(samlResponseXML, idpCertFile, idAttr)
-				if err == nil {
-					// No error, this message is OK
-					break
-				}
-
-				// We got an error...
-				if !saml.IsSecurityException(err, &m.sp.SecurityOpts) {
-					// ...but it was not a security exception, so we ignore it and accept
-					// the verification.
-					break
-				}
-
-				// We had an error, let's try with the next ID.
-				assertionErr = err
-			}
-
-			if assertionErr != nil {
-				clientErr(w, r, errors.Wrap(assertionErr, "Unable to verify assertion"))
-				return
-			}
 		}
 
 		if assertion == nil {
