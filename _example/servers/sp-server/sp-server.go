@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/goware/saml"
-	"github.com/goware/saml/middleware/sp"
 )
 
 var (
@@ -112,18 +111,16 @@ func main() {
 		},
 	}
 
-	middleware := sp.NewMiddleware(&serviceProvider)
-
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get(metadataPath, middleware.ServeMetadata)
-	r.Post(acsPath, middleware.ServeAcs(accessGranted))
+	r.Get(metadataPath, serviceProvider.ServeMetadata)
+	r.Post(acsPath, serviceProvider.ServeAcs(accessGranted))
 
 	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {
 	case "sp":
-		r.Get("/", setRelayState(middleware.ServeRequestAuth))
+		r.Get("/", setRelayState(serviceProvider.ServeRequestAuth))
 		log.Printf("Go to %s to begin the SP initiated login.", *flagPublicURL)
 	}
 
