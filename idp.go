@@ -1,6 +1,7 @@
 package saml
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
@@ -427,7 +428,8 @@ func (req *IdpAuthnRequest) MarshalAssertion() error {
 		}
 	}
 
-	req.AssertionBuffer = buf
+	req.AssertionBuffer = bytes.TrimSpace(bytes.TrimPrefix(buf, []byte(`<?xml version="1.0"?>`)))
+
 	return nil
 }
 
@@ -438,6 +440,7 @@ func (req *IdpAuthnRequest) MakeResponse() error {
 			return err
 		}
 	}
+
 	req.Response = &Response{
 		Destination:  req.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient,
 		ID:           NewID(),

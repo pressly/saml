@@ -19,6 +19,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+var idAttrs = []string{
+	"urn:oasis:names:tc:SAML:2.0:protocol:Response",
+	"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
+}
+
 // AccessFunction is a function that returns an HTTP handler that is called
 // after a successful assertion validation.
 type AccessFunction func(*saml.Assertion) func(http.ResponseWriter, *http.Request)
@@ -134,6 +139,37 @@ func (m *Middleware) possibleResponseIDs() []string {
 	return responseIDs
 }
 
+func (m *Middleware) verifySignature(plaintextMessage []byte) error {
+	idpCertFile, err := m.sp.GetIdPCertFile()
+	if err != nil {
+		return err
+	}
+
+	var validationErr error
+	for _, idAttr := range idAttrs {
+		err := xmlsec.Verify(plaintextMessage, idpCertFile, idAttr)
+		if err == nil {
+			// No error, this message is OK
+			return nil
+		}
+
+		// We got an error...
+		if !saml.IsSecurityException(err, &m.sp.SecurityOpts) {
+			// ...but it was not a security exception, so we ignore it and accept
+			// the verification.
+			return nil
+		}
+
+		// We had an error, let's try with the next ID.
+		validationErr = err
+	}
+	if validationErr != nil {
+		return validationErr
+	}
+
+	return errors.New("could not find validation node ID")
+}
+
 // ServeAcs creates an HTTP handler that can be used to authenticate and
 // validate an assertion. If the assertion is valid the flow it passed to the
 // given grantFn function.
@@ -221,47 +257,27 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			return
 		}
 
-		// Message verification.
-		idpCertFile, err := m.sp.GetIdPCertFile()
+		// Try getting the IdP's cert file before using it.
+		_, err = m.sp.GetIdPCertFile()
 		if err != nil {
 			internalErr(w, errors.Errorf("Failed to get private key: %v", err))
 			return
 		}
 
-		// Validate message
+		// Validating message.
+		signatureOK := false
 
-		var validationErr error
-
-		idAttrs := []string{
-			"urn:oasis:names:tc:SAML:2.0:protocol:Response",
-			"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
-		}
-
-		for _, idAttr := range idAttrs {
-			err := xmlsec.Verify(samlResponseXML, idpCertFile, idAttr)
-			if err == nil {
-				// No error, this message is OK
-				break
+		if res.Signature != nil {
+			err := m.verifySignature(samlResponseXML)
+			if err != nil {
+				clientErr(w, r, errors.Wrapf(err, "Unable to verify message signature"))
+				return
+			} else {
+				signatureOK = true
 			}
-
-			// We got an error...
-			if !saml.IsSecurityException(err, &m.sp.SecurityOpts) {
-				// ...but it was not a security exception, so we ignore it and accept
-				// the verification.
-				break
-			}
-
-			// We had an error, let's try with the next ID.
-			validationErr = err
-		}
-
-		if validationErr != nil {
-			clientErr(w, r, errors.Wrap(validationErr, "Unable to verify assertion"))
-			return
 		}
 
 		// Retrieve assertion
-
 		var assertion *saml.Assertion
 
 		if res.EncryptedAssertion != nil {
@@ -284,12 +300,27 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 				clientErr(w, r, errors.Wrap(err, "Unable to parse assertion"))
 				return
 			}
+
+			if assertion.Signature != nil {
+				err := m.verifySignature(plainTextAssertion)
+				if err != nil {
+					clientErr(w, r, errors.Wrapf(err, "Unable to verify assertion signature"))
+					return
+				} else {
+					signatureOK = true
+				}
+			}
 		} else {
 			assertion = res.Assertion
 		}
-
 		if assertion == nil {
 			clientErr(w, r, errors.New("Missing assertion"))
+			return
+		}
+
+		// Did we receive a signature?
+		if !signatureOK {
+			clientErr(w, r, errors.New("Unable to validate signature: node not found"))
 			return
 		}
 
@@ -377,13 +408,19 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 }
 
 func publicErrorMessage(err error) string {
-	// is there any better way to retrieve the error _message_ without the cause?
-	msg := err.Error()
-	parts := strings.SplitN(msg, ":", 2)
-	if len(parts) > 0 {
-		return parts[0]
+	type hasCause interface {
+		Cause(err error) error
 	}
-	return msg
+	// is there any better way to retrieve the error _message_ without the cause?
+	if _, ok := err.(hasCause); ok {
+		msg := err.Error()
+		parts := strings.SplitN(msg, ":", 2)
+		if len(parts) > 0 {
+			return parts[0]
+		}
+		return msg
+	}
+	return err.Error()
 }
 
 func clientErr(w http.ResponseWriter, r *http.Request, err error) {
