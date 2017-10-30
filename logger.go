@@ -26,10 +26,6 @@ type UserRequest struct {
 func (ur UserRequest) String() string {
 	lines := []string{}
 
-	if ur.Context != nil {
-		lines = append(lines, fmt.Sprintf("Context: %v", ur.Context))
-	}
-
 	lines = append(lines, fmt.Sprintf("Method: %s", ur.Method))
 	lines = append(lines, fmt.Sprintf("RemoteAddr: %s", ur.RemoteAddr))
 	lines = append(lines, fmt.Sprintf("RequestURI: %s", ur.RequestURI))
