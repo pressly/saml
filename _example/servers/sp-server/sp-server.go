@@ -116,7 +116,7 @@ func main() {
 
 	r.Get(metadataPath, serviceProvider.MetadataHandler)
 
-	r.With(serviceProvider.AssertionConsumer).
+	r.With(serviceProvider.AssertionMiddleware).
 		Post(acsPath, accessGrantedHandler)
 
 	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)

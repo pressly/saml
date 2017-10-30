@@ -149,10 +149,10 @@ func (sp *ServiceProvider) verifySignature(plaintextMessage []byte) error {
 	return errors.New("could not find validation node ID")
 }
 
-// AssertionConsumer creates an HTTP handler that can be used to authenticate and
-// validate an assertion. If the assertion is valid the flow it passed to the
-// given grantFn function.
-func (sp *ServiceProvider) AssertionConsumer(next http.Handler) http.Handler {
+// AssertionMiddleware creates an HTTP handler that can be used to authenticate
+// and validate an assertion. If the assertion is valid the flow it passed to
+// the given grantFn function.
+func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := Now()
 
