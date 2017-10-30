@@ -40,9 +40,9 @@ func parseFormAndKeepBody(r *http.Request) error {
 	return nil
 }
 
-// RequestAuthHandler creates an authentication assert and makes the user send it
+// AuthnRequestHandler creates an authentication assert and makes the user send it
 // to the IdP (via redirection).
-func (sp *ServiceProvider) RequestAuthHandler(w http.ResponseWriter, r *http.Request) {
+func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	destination, err := sp.GetIdPAuthResource()
