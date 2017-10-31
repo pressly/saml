@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/goware/saml"
-	"github.com/goware/saml/middleware/idp"
 	"github.com/pressly/chi"
 
 	"time"
@@ -75,7 +74,7 @@ func authFn(w http.ResponseWriter, r *http.Request) (*saml.Session, error) {
 }
 
 // initiateLogin creates a message for the SP.
-func initiateLogin(m *idp.Middleware) http.HandlerFunc {
+func initiateLogin(idp *saml.IdentityProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 
@@ -91,7 +90,7 @@ func initiateLogin(m *idp.Middleware) http.HandlerFunc {
 			ctx = context.WithValue(ctx, "saml.RelayState", *flagRelayState)
 		}
 
-		req, err := m.NewLoginRequest(spMetadataURL, authFn)
+		req, err := idp.NewLoginRequest(spMetadataURL, authFn)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -183,21 +182,19 @@ func main() {
 		},
 	}
 
-	middleware := idp.NewMiddleware(&identityProvider)
-
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get(metadataPath, middleware.ServeMetadata)
+	r.Get(metadataPath, identityProvider.MetadataHandler)
 
 	log.Printf("Test IdP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {
 	case "idp":
 		r.Get("/", displayLoginForm)
-		r.Get(initiatePath, initiateLogin(middleware))
+		r.Get(initiatePath, initiateLogin(&identityProvider))
 		log.Printf("Go to %s to begin the IdP initiated login.", *flagPublicURL)
 	case "sp":
-		r.Get(ssoPath, middleware.ServeSSO(authFn))
+		r.Get(ssoPath, identityProvider.ServeSSO(authFn))
 	}
 
 	log.Fatal(http.ListenAndServe(*flagListenAddr, r))

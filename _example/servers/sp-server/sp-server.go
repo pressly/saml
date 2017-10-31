@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/goware/saml"
-	"github.com/goware/saml/middleware/sp"
 )
 
 var (
@@ -31,34 +30,34 @@ const (
 	acsPath      = "/saml/acs"
 )
 
-func accessGranted(assertion *saml.Assertion) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+func accessGrantedHandler(w http.ResponseWriter, r *http.Request) {
+	assertion := saml.GetAssertionFromCtx(r.Context())
 
-		relayState := r.Form.Get("RelayState")
+	r.ParseForm()
 
-		log.Printf("Login OK, RelayState: %v", relayState)
+	relayState := r.Form.Get("RelayState")
 
-		claims := map[string]interface{}{}
-		for _, attr := range assertion.AttributeStatement.Attributes {
-			values := []string{}
-			for _, value := range attr.Values {
-				values = append(values, value.Value)
-			}
-			key := attr.FriendlyName
-			if key == "" {
-				key = attr.Name
-			}
-			claims[key] = values
+	log.Printf("Login OK, RelayState: %v", relayState)
+
+	claims := map[string]interface{}{}
+	for _, attr := range assertion.AttributeStatement.Attributes {
+		values := []string{}
+		for _, value := range attr.Values {
+			values = append(values, value.Value)
 		}
-		buf, err := json.Marshal(claims)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+		key := attr.FriendlyName
+		if key == "" {
+			key = attr.Name
 		}
-
-		w.Write(buf)
+		claims[key] = values
 	}
+	buf, err := json.Marshal(claims)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(buf)
 }
 
 func logHandler(next http.Handler) http.Handler {
@@ -112,18 +111,18 @@ func main() {
 		},
 	}
 
-	middleware := sp.NewMiddleware(&serviceProvider)
-
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get(metadataPath, middleware.ServeMetadata)
-	r.Post(acsPath, middleware.ServeAcs(accessGranted))
+	r.Get(metadataPath, serviceProvider.MetadataHandler)
+
+	r.With(serviceProvider.AssertionMiddleware).
+		Post(acsPath, accessGrantedHandler)
 
 	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {
 	case "sp":
-		r.Get("/", setRelayState(middleware.ServeRequestAuth))
+		r.Get("/", setRelayState(serviceProvider.RequestAuthHandler))
 		log.Printf("Go to %s to begin the SP initiated login.", *flagPublicURL)
 	}
 

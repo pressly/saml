@@ -1,10 +1,11 @@
 // Package sp provides tools for buildin an SP such as serving metadata,
 // authenticating an assertion and building assertions for IdPs.
-package sp
+package saml
 
 import (
 	"bytes"
 	"compress/flate"
+	"context"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/goware/saml"
 	"github.com/goware/saml/xmlsec"
 	"github.com/pkg/errors"
 )
@@ -22,19 +22,6 @@ import (
 var idAttrs = []string{
 	"urn:oasis:names:tc:SAML:2.0:protocol:Response",
 	"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
-}
-
-// AccessFunction is a function that returns an HTTP handler that is called
-// after a successful assertion validation.
-type AccessFunction func(*saml.Assertion) func(http.ResponseWriter, *http.Request)
-
-// AuthFunction is an authentication handler that returns true after a
-// successful authentication.
-type AuthFunction func(http.ResponseWriter, *http.Request) bool
-
-// Middleware represents a SP middleware.
-type Middleware struct {
-	sp *saml.ServiceProvider
 }
 
 func parseFormAndKeepBody(r *http.Request) error {
@@ -53,26 +40,18 @@ func parseFormAndKeepBody(r *http.Request) error {
 	return nil
 }
 
-// NewMiddleware creates a middleware based on the given service provider.
-func NewMiddleware(sp *saml.ServiceProvider) *Middleware {
-	if sp == nil {
-		panic("SP cannot be a nil value.")
-	}
-	return &Middleware{sp: sp}
-}
-
-// ServeRequestAuth creates an authentication assert and makes the user send it
+// AuthnRequestHandler creates an authentication assert and makes the user send it
 // to the IdP (via redirection).
-func (m *Middleware) ServeRequestAuth(w http.ResponseWriter, r *http.Request) {
+func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	destination, err := m.sp.GetIdPAuthResource()
+	destination, err := sp.GetIdPAuthResource()
 	if err != nil {
 		internalErr(w, errors.Errorf("GetIdPAuthResource: %v", err))
 		return
 	}
 
-	authnRequest, err := m.sp.MakeAuthenticationRequest(destination)
+	authnRequest, err := sp.MakeAuthenticationRequest(destination)
 	if err != nil {
 		internalErr(w, errors.Errorf("Failed to make auth request to %v: %v", destination, err))
 		return
@@ -114,9 +93,9 @@ func (m *Middleware) ServeRequestAuth(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// ServeMetadata creates and serves a metadata XML file.
-func (m *Middleware) ServeMetadata(w http.ResponseWriter, r *http.Request) {
-	metadata, err := m.sp.Metadata()
+// MetadataHandler creates and serves a metadata XML file.
+func (sp *ServiceProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
+	metadata, err := sp.Metadata()
 	if err != nil {
 		internalErr(w, errors.Errorf("Failed to build metadata %v", err))
 		return
@@ -131,16 +110,16 @@ func (m *Middleware) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func (m *Middleware) possibleResponseIDs() []string {
+func (sp *ServiceProvider) possibleResponseIDs() []string {
 	responseIDs := []string{}
-	if m.sp.AllowIdpInitiated {
+	if sp.AllowIdpInitiated {
 		responseIDs = append(responseIDs, "")
 	}
 	return responseIDs
 }
 
-func (m *Middleware) verifySignature(plaintextMessage []byte) error {
-	idpCertFile, err := m.sp.GetIdPCertFile()
+func (sp *ServiceProvider) verifySignature(plaintextMessage []byte) error {
+	idpCertFile, err := sp.GetIdPCertFile()
 	if err != nil {
 		return err
 	}
@@ -154,7 +133,7 @@ func (m *Middleware) verifySignature(plaintextMessage []byte) error {
 		}
 
 		// We got an error...
-		if !saml.IsSecurityException(err, &m.sp.SecurityOpts) {
+		if !IsSecurityException(err, &sp.SecurityOpts) {
 			// ...but it was not a security exception, so we ignore it and accept
 			// the verification.
 			return nil
@@ -170,12 +149,12 @@ func (m *Middleware) verifySignature(plaintextMessage []byte) error {
 	return errors.New("could not find validation node ID")
 }
 
-// ServeAcs creates an HTTP handler that can be used to authenticate and
-// validate an assertion. If the assertion is valid the flow it passed to the
-// given grantFn function.
-func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		now := saml.Now()
+// AssertionMiddleware creates an HTTP handler that can be used to authenticate
+// and validate an assertion. If the assertion is valid the flow it passed to
+// the given grantFn function.
+func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		now := Now()
 
 		if err := parseFormAndKeepBody(r); err != nil {
 			clientErr(w, r, errors.Wrap(err, "Unable to read POST data"))
@@ -187,8 +166,8 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		relayState := r.Form.Get("RelayState")
 
 		// TODO: Remove this when we're stable enough.
-		saml.Logf("SAMLResponse -> %v", samlResponse)
-		saml.Logf("relayState -> %v", relayState)
+		Logf("SAMLResponse -> %v", samlResponse)
+		Logf("relayState -> %v", relayState)
 
 		_ = relayState // Don't know what to do with this yet.
 
@@ -199,9 +178,9 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			return
 		}
 
-		saml.Logf("SAMLResponse (XML) -> %v", string(samlResponseXML))
+		Logf("SAMLResponse (XML) -> %v", string(samlResponseXML))
 
-		var res saml.Response
+		var res Response
 		err = xml.Unmarshal(samlResponseXML, &res)
 		if err != nil {
 			err = errors.Wrapf(err, "could not unmarshal XML document: %s", string(samlResponseXML))
@@ -209,7 +188,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			return
 		}
 
-		_, err = m.sp.GetIdPMetadata()
+		_, err = sp.GetIdPMetadata()
 		if err != nil {
 			clientErr(w, r, errors.Wrap(err, "unable to retrieve IdP metadata"))
 			return
@@ -217,19 +196,19 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 
 		// Validate message.
 
-		if res.Destination != m.sp.AcsURL {
+		if res.Destination != sp.AcsURL {
 			// Note: OneLogin triggers this error when the Recipient field
 			// is left blank (or when not set to the correct ACS endpoint)
 			// in the OneLogin SAML configuration page. OneLogin returns
 			// Destination="{recipient}" in the SAML reponse in this case.
-			err := errors.Errorf("Wrong ACS destination, expecting %q, got %q", m.sp.AcsURL, res.Destination)
+			err := errors.Errorf("Wrong ACS destination, expecting %q, got %q", sp.AcsURL, res.Destination)
 			clientErr(w, r, errors.Wrap(err, "Wrong ACS destination"))
 			return
 		}
 
-		if m.sp.IdPMetadata.EntityID != "" {
-			if res.Issuer.Value != m.sp.IdPMetadata.EntityID {
-				err := errors.Errorf("Issuer %q does not match expected entity ID %q", res.Issuer.Value, m.sp.IdPMetadata.EntityID)
+		if sp.IdPMetadata.EntityID != "" {
+			if res.Issuer.Value != sp.IdPMetadata.EntityID {
+				err := errors.Errorf("Issuer %q does not match expected entity ID %q", res.Issuer.Value, sp.IdPMetadata.EntityID)
 				clientErr(w, r, errors.Wrap(err, "Issuer does not match expected entity ID"))
 				return
 			}
@@ -242,7 +221,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		}
 
 		expectedResponse := false
-		responseIDs := m.possibleResponseIDs()
+		responseIDs := sp.possibleResponseIDs()
 		for i := range responseIDs {
 			if responseIDs[i] == res.InResponseTo {
 				expectedResponse = true
@@ -258,7 +237,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		}
 
 		// Try getting the IdP's cert file before using it.
-		_, err = m.sp.GetIdPCertFile()
+		_, err = sp.GetIdPCertFile()
 		if err != nil {
 			internalErr(w, errors.Errorf("Failed to get private key: %v", err))
 			return
@@ -268,7 +247,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		signatureOK := false
 
 		if res.Signature != nil {
-			err := m.verifySignature(samlResponseXML)
+			err := sp.verifySignature(samlResponseXML)
 			if err != nil {
 				clientErr(w, r, errors.Wrapf(err, "Unable to verify message signature"))
 				return
@@ -278,10 +257,10 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		}
 
 		// Retrieve assertion
-		var assertion *saml.Assertion
+		var assertion *Assertion
 
 		if res.EncryptedAssertion != nil {
-			keyFile, err := m.sp.PrivkeyFile()
+			keyFile, err := sp.PrivkeyFile()
 			if err != nil {
 				internalErr(w, errors.Errorf("Failed to get private key: %v", err))
 				return
@@ -289,20 +268,20 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 
 			plainTextAssertion, err := xmlsec.Decrypt(res.EncryptedAssertion.EncryptedData, keyFile)
 			if err != nil {
-				if saml.IsSecurityException(err, &m.sp.SecurityOpts) {
+				if IsSecurityException(err, &sp.SecurityOpts) {
 					clientErr(w, r, errors.Wrap(err, "Unable to decrypt message"))
 					return
 				}
 			}
 
-			assertion = &saml.Assertion{}
+			assertion = &Assertion{}
 			if err := xml.Unmarshal(plainTextAssertion, assertion); err != nil {
 				clientErr(w, r, errors.Wrap(err, "Unable to parse assertion"))
 				return
 			}
 
 			if assertion.Signature != nil {
-				err := m.verifySignature(plainTextAssertion)
+				err := sp.verifySignature(plainTextAssertion)
 				if err != nil {
 					clientErr(w, r, errors.Wrapf(err, "Unable to verify assertion signature"))
 					return
@@ -325,16 +304,16 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		}
 
 		// Validate assertion.
-		if m.sp.IdPMetadata.EntityID != "" {
-			if assertion.Issuer.Value != m.sp.IdPMetadata.EntityID {
-				err := errors.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, m.sp.IdPMetadata.EntityID)
+		if sp.IdPMetadata.EntityID != "" {
+			if assertion.Issuer.Value != sp.IdPMetadata.EntityID {
+				err := errors.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, sp.IdPMetadata.EntityID)
 				clientErr(w, r, errors.Wrap(err, "Assertion issuer does not match expected entity ID"))
 				return
 			}
 		}
 
-		if assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != m.sp.AcsURL {
-			err := errors.Errorf("Unexpected assertion recipient, expecting %q, got %q", m.sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
+		if assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL {
+			err := errors.Errorf("Unexpected assertion recipient, expecting %q, got %q", sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
 			clientErr(w, r, errors.Wrapf(err, "Unexpected assertion recipient"))
 			return
 		}
@@ -349,7 +328,7 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotOnOrAfter is omitted, then it is considered unspecified.
 		{
 			validFrom := assertion.Conditions.NotBefore
-			if !validFrom.IsZero() && validFrom.After(now.Add(saml.ClockDriftTolerance)) {
+			if !validFrom.IsZero() && validFrom.After(now.Add(ClockDriftTolerance)) {
 				err := errors.Errorf("Assertion conditions are not valid yet, got %v, current time is %v", validFrom, now)
 				clientErr(w, r, errors.Wrap(err, "Assertion conditions are not valid yet"))
 				return
@@ -358,8 +337,8 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 
 		{
 			validUntil := assertion.Conditions.NotOnOrAfter
-			if !validUntil.IsZero() && validUntil.Before(now.Add(-saml.ClockDriftTolerance)) {
-				err := errors.Errorf("Assertion conditions already expired, got %v current time is %v, extra time is %v", validUntil, now, now.Add(-saml.ClockDriftTolerance))
+			if !validUntil.IsZero() && validUntil.Before(now.Add(-ClockDriftTolerance)) {
+				err := errors.Errorf("Assertion conditions already expired, got %v current time is %v, extra time is %v", validUntil, now, now.Add(-ClockDriftTolerance))
 				clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 				return
 			}
@@ -374,15 +353,15 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 		// NotOnOrAfter attributes. If both attributes are present, the value for
 		// NotBefore MUST be less than (earlier than) the value for NotOnOrAfter.
 
-		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now.Add(-saml.ClockDriftTolerance)) {
+		if validUntil := assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter; validUntil.Before(now.Add(-ClockDriftTolerance)) {
 			err := errors.Errorf("Assertion conditions already expired, got %v current time is %v", validUntil, now)
 			clientErr(w, r, errors.Wrap(err, "Assertion conditions already expired"))
 			return
 		}
 
 		if assertion.Conditions.AudienceRestriction != nil {
-			if assertion.Conditions.AudienceRestriction.Audience.Value != m.sp.MetadataURL {
-				// clientErr(w, fmt.Errorf("Audience restriction mismatch, got %q, expecting %q", assertion.Conditions.AudienceRestriction.Audience.Value, m.sp.MetadataURL), errors.New("Audience restriction mismatch"))
+			if assertion.Conditions.AudienceRestriction.Audience.Value != sp.MetadataURL {
+				// clientErr(w, fmt.Errorf("Audience restriction mismatch, got %q, expecting %q", assertion.Conditions.AudienceRestriction.Audience.Value, sp.MetadataURL), errors.New("Audience restriction mismatch"))
 				// return
 			}
 		}
@@ -402,9 +381,9 @@ func (m *Middleware) ServeAcs(grantFn AccessFunction) func(http.ResponseWriter, 
 			return
 		}
 
-		assertionHandler := grantFn(assertion)
-		assertionHandler(w, r)
-	}
+		ctx := context.WithValue(r.Context(), "saml.assertion", assertion)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func publicErrorMessage(err error) string {
@@ -426,9 +405,9 @@ func publicErrorMessage(err error) string {
 func clientErr(w http.ResponseWriter, r *http.Request, err error) {
 	publicError := publicErrorMessage(err)
 
-	report := saml.InspectRequest(r)
+	report := InspectRequest(r)
 
-	saml.Fatal(errors.Wrapf(err, "failed request: %s", report.String()))
+	Fatal(errors.Wrapf(err, "failed request: %s", report.String()))
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusBadRequest)
@@ -440,7 +419,7 @@ func internalErr(w http.ResponseWriter, err error) {
 }
 
 func serverErr(w http.ResponseWriter, err error) {
-	saml.Fatal(err)
+	Fatal(err)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusInternalServerError)

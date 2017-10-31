@@ -1,4 +1,4 @@
-package idp
+package saml
 
 import (
 	"bytes"
@@ -6,17 +6,39 @@ import (
 	"encoding/xml"
 	"net/http"
 	"text/template"
-
-	"github.com/goware/saml"
 )
+
+var redirectFormTemplate = `<!DOCTYPE html>
+<html>
+	<head></head>
+	<body>
+		<form id="redirect" method="POST" action="{{.FormAction}}">
+			<input type="hidden" name="RelayState" value="{{.RelayState}}" />
+			<input type="hidden" name="SAMLResponse" value="{{.SAMLResponse}}" />
+		</form>
+		<script type="text/javascript">
+			document.getElementById("redirect").submit();
+		</script>
+	</body>
+</html>`
+
+// Authenticator defines an authentication function that returns a
+// *saml.Session value.
+type Authenticator func(w http.ResponseWriter, r *http.Request) (*Session, error)
+
+type redirectForm struct {
+	FormAction   string
+	RelayState   string
+	SAMLResponse string
+}
 
 // LoginRequest represents a login request that the IdP creates in order to try
 // autenticating against a SP.
 type LoginRequest struct {
 	spMetadataURL string
-	metadata      *saml.Metadata
+	metadata      *Metadata
 	authFn        Authenticator
-	m             *Middleware
+	idp           *IdentityProvider
 }
 
 // PostForm creates and serves a form that is used to authenticate to the SP.
@@ -25,42 +47,42 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 
 	sess, err := lr.authFn(w, r)
 	if err != nil {
-		saml.Logf("authFn: %v", err)
+		Logf("authFn: %v", err)
 		return
 	}
 
-	authnRequest := &saml.AuthnRequest{}
+	authnRequest := &AuthnRequest{}
 
-	idpAuthnRequest := &saml.IdpAuthnRequest{
-		IDP:                     lr.m.idp,
+	idpAuthnRequest := &IdpAuthnRequest{
+		IDP:                     lr.idp,
 		HTTPRequest:             r,
 		Request:                 *authnRequest,
 		ServiceProviderMetadata: lr.metadata,
 	}
 
 	if err = idpAuthnRequest.MakeAssertion(sess); err != nil {
-		saml.Logf("Failed to build assertion %v", err)
+		Logf("Failed to build assertion %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	err = idpAuthnRequest.MarshalAssertion()
 	if err != nil {
-		saml.Logf("Failed to marshal assertion %v", err)
+		Logf("Failed to marshal assertion %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	err = idpAuthnRequest.MakeResponse()
 	if err != nil {
-		saml.Logf("Failed to build response %v", err)
+		Logf("Failed to build response %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	buf, err := xml.MarshalIndent(idpAuthnRequest.Response, "", "\t")
 	if err != nil {
-		saml.Logf("Failed to format response %v", err)
+		Logf("Failed to format response %v", err)
 		writeErr(w, err)
 		return
 	}
@@ -81,14 +103,14 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 
 	formTpl, err := template.New("").Parse(redirectFormTemplate)
 	if err != nil {
-		saml.Logf("Failed to create form %v", err)
+		Logf("Failed to create form %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	formBuf := bytes.NewBuffer(nil)
 	if err := formTpl.Execute(formBuf, form); err != nil {
-		saml.Logf("Failed to build form %v", err)
+		Logf("Failed to build form %v", err)
 		writeErr(w, err)
 		return
 	}
