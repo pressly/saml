@@ -36,7 +36,9 @@ func NewAttributesMap(assertion *Assertion) *AttributesMap {
 // Get returns the first value of the given attribute, if any.
 func (a *AttributesMap) Get(name string) string {
 	if v, ok := (map[string][]string)(*a)[name]; ok {
-		return v[0]
+		if len(v) > 0 {
+			return v[0]
+		}
 	}
 	return ""
 }
