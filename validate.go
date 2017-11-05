@@ -8,6 +8,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -39,7 +41,7 @@ func retriveCertificate(file string) (cert *x509.Certificate, err error) {
 
 	block, _ := pem.Decode(buf)
 	if block == nil {
-		return nil, fmt.Errorf("Failed to decode certificate (%v).", file)
+		return nil, fmt.Errorf("failed to decode certificate (%v)", file)
 	}
 
 	cert, err = x509.ParseCertificate(block.Bytes)
@@ -57,17 +59,17 @@ func validateKeyFile(file string, err error) (string, error) {
 
 	cert, err := retriveCertificate(file)
 	if err != nil {
-		return "", fmt.Errorf("Failed to read certificate (%v): %v", file, err)
+		return "", errors.Wrapf(err, "failed to read certificate %v", file)
 	}
 
 	now := time.Now()
 
 	if now.Before(cert.NotBefore) {
-		return "", fmt.Errorf("cert is not valid before %v", cert.NotBefore)
+		return "", fmt.Errorf("security certificate is not valid yet (notBefore=%v)", cert.NotBefore)
 	}
 
 	if now.After(cert.NotAfter) {
-		return "", fmt.Errorf("cert is not valid after %v", cert.NotAfter)
+		return "", fmt.Errorf("security certificate has expired (notAfter=%v)", cert.NotAfter)
 	}
 
 	certMu.Lock()

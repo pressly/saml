@@ -97,12 +97,12 @@ func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Re
 func (sp *ServiceProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := sp.Metadata()
 	if err != nil {
-		internalErr(w, errors.Errorf("Failed to build metadata %v", err))
+		internalErr(w, errors.Wrapf(err, "could not build nor serve metadata XML"))
 		return
 	}
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	if err != nil {
-		internalErr(w, errors.Errorf("Failed to format metadata %v", err))
+		internalErr(w, errors.Wrapf(err, "could not format metadata"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf8")
