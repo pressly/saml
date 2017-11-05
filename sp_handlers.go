@@ -207,6 +207,10 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 		}
 
 		if sp.IdPMetadata.EntityID != "" {
+			if res.Issuer == nil {
+				clientErr(w, r, errors.New(`Missing "Issuer" node`))
+				return
+			}
 			if res.Issuer.Value != sp.IdPMetadata.EntityID {
 				err := errors.Errorf("Issuer %q does not match expected entity ID %q", res.Issuer.Value, sp.IdPMetadata.EntityID)
 				clientErr(w, r, errors.Wrap(err, "Issuer does not match expected entity ID"))
@@ -304,17 +308,41 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Validate assertion.
-		if sp.IdPMetadata.EntityID != "" {
-			if assertion.Issuer.Value != sp.IdPMetadata.EntityID {
-				err := errors.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, sp.IdPMetadata.EntityID)
+		{
+			var err error
+			switch {
+			case sp.IdPMetadata.EntityID == "":
+				// Skip issuer validation
+			case res.Issuer == nil:
+				err = errors.New(`missing Assertion > Issuer`)
+			case assertion.Issuer.Value != sp.IdPMetadata.EntityID:
+				err = errors.Errorf("Assertion issuer %q does not match expected entity ID %q", assertion.Issuer.Value, sp.IdPMetadata.EntityID)
+			}
+			if err != nil {
 				clientErr(w, r, errors.Wrap(err, "Assertion issuer does not match expected entity ID"))
+			}
+		}
+
+		// Validate recipient
+		{
+			var err error
+			switch {
+			case assertion.Subject == nil:
+				err = errors.New(`missing Assertion > Subject`)
+			case assertion.Subject.SubjectConfirmation == nil:
+				err = errors.New(`missing Assertion > Subject > SubjectConfirmation`)
+			case assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL:
+				err = errors.Errorf("unexpected assertion recipient, expecting %q, got %q", sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
+			}
+			if err != nil {
+				clientErr(w, r, errors.Wrapf(err, "invalid assertion recipient"))
 				return
 			}
 		}
 
-		if assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL {
-			err := errors.Errorf("Unexpected assertion recipient, expecting %q, got %q", sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
-			clientErr(w, r, errors.Wrapf(err, "Unexpected assertion recipient"))
+		// Make sure we have Conditions
+		if assertion.Conditions == nil {
+			clientErr(w, r, errors.New(`missing Assertion > Conditions`))
 			return
 		}
 
@@ -359,12 +387,12 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if assertion.Conditions.AudienceRestriction != nil {
-			if assertion.Conditions.AudienceRestriction.Audience.Value != sp.MetadataURL {
-				// clientErr(w, fmt.Errorf("Audience restriction mismatch, got %q, expecting %q", assertion.Conditions.AudienceRestriction.Audience.Value, sp.MetadataURL), errors.New("Audience restriction mismatch"))
-				// return
-			}
-		}
+		// if assertion.Conditions != nil && assertion.Conditions.AudienceRestriction != nil {
+		//   if assertion.Conditions.AudienceRestriction.Audience.Value != sp.MetadataURL {
+		//     clientErr(w, fmt.Errorf("Audience restriction mismatch, got %q, expecting %q", assertion.Conditions.AudienceRestriction.Audience.Value, sp.MetadataURL), errors.New("Audience restriction mismatch"))
+		//     return
+		//   }
+		// }
 
 		expectedResponse = false
 		for i := range responseIDs {
