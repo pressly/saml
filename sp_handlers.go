@@ -435,7 +435,7 @@ func clientErr(w http.ResponseWriter, r *http.Request, err error) {
 
 	report := InspectRequest(r)
 
-	Fatal(errors.Wrapf(err, "failed request: %s", report.String()))
+	Fatal(fmt.Errorf("failed request: %v, details: %s", err, report.String()))
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusBadRequest)
