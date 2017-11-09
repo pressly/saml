@@ -415,11 +415,11 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 }
 
 func publicErrorMessage(err error) string {
-	type hasCause interface {
-		Cause(err error) error
+	type causer interface {
+		Cause() error
 	}
 	// is there any better way to retrieve the error _message_ without the cause?
-	if _, ok := err.(hasCause); ok {
+	if _, ok := err.(causer); ok {
 		msg := err.Error()
 		parts := strings.SplitN(msg, ":", 2)
 		if len(parts) > 0 {
