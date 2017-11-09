@@ -250,7 +250,7 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 		// Validating message.
 		signatureOK := false
 
-		if res.Signature != nil {
+		if res.Signature != nil || (res.Assertion != nil && res.Assertion.Signature != nil) {
 			err := sp.verifySignature(samlResponseXML)
 			if err != nil {
 				clientErr(w, r, errors.Wrapf(err, "Unable to verify message signature"))
