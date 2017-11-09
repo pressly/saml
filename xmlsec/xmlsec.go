@@ -179,6 +179,7 @@ func Decrypt(in []byte, privateKeyPath string) ([]byte, error) {
 func Verify(in []byte, publicCertPath string, id string) error {
 	cmd := exec.Command("xmlsec1", "--verify",
 		"--pubkey-cert-pem", publicCertPath,
+		"--enabled-reference-uris", "empty,same-doc",
 		"--id-attr:ID", id,
 		"/dev/stdin",
 	)
@@ -236,10 +237,10 @@ func Verify(in []byte, publicCertPath string, id string) error {
 
 // Sign takes a XML document and produces a signature.
 func Sign(in []byte, privateKeyPath string, id string) (out []byte, err error) {
-
 	cmd := exec.Command("xmlsec1",
 		"--sign",
 		"--privkey-pem", privateKeyPath,
+		"--enabled-reference-uris", "empty,same-doc",
 		"--id-attr:ID", id,
 		"--output", "/dev/stdout",
 		"/dev/stdin",
