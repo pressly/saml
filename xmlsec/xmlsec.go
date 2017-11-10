@@ -179,6 +179,9 @@ func Decrypt(in []byte, privateKeyPath string) ([]byte, error) {
 func Verify(in []byte, publicCertPath string, id string) error {
 	cmd := exec.Command("xmlsec1", "--verify",
 		"--pubkey-cert-pem", publicCertPath,
+		// Security: Don't ever use --enabled-reference-uris "local" value,
+		// since it'd allow potential attackers to read local files using
+		// <Reference URI="file:///etc/passwd"> hack!
 		"--enabled-reference-uris", "empty,same-doc",
 		"--id-attr:ID", id,
 		"/dev/stdin",
