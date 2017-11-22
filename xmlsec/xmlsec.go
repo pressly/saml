@@ -305,6 +305,9 @@ func xmlsecErr(s string) error {
 	if strings.HasPrefix(s, "OK") {
 		return nil
 	}
+	if strings.Contains(err.Error(), "signature failed") {
+		return err
+	}
 	if strings.Contains(err.Error(), "msg=self signed certificate") {
 		return ErrSelfSignedCertificate{err}
 	}
