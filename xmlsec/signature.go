@@ -54,12 +54,17 @@ type Signature struct {
 
 	CanonicalizationMethod Method             `xml:"SignedInfo>CanonicalizationMethod"`
 	SignatureMethod        Method             `xml:"SignedInfo>SignatureMethod"`
-	ReferenceTransforms    []Method           `xml:"SignedInfo>Reference>Transforms>Transform"`
-	DigestMethod           Method             `xml:"SignedInfo>Reference>DigestMethod"`
-	DigestValue            string             `xml:"SignedInfo>Reference>DigestValue"`
+	Reference              Reference          `xml:"SignedInfo>Reference"`
 	SignatureValue         string             `xml:"SignatureValue"`
 	KeyName                string             `xml:"KeyInfo>KeyName,omitempty"`
 	X509Certificate        *SignatureX509Data `xml:"KeyInfo>X509Data,omitempty"`
+}
+
+type Reference struct {
+	URI          string   `xml:"URI,attr,omitempty"`
+	Transforms   []Method `xml:"Transforms>Transform"`
+	DigestMethod Method   `xml:"DigestMethod"`
+	DigestValue  string   `xml:"DigestValue"`
 }
 
 // SignatureX509Data represents the <X509Data> element of <Signature>
@@ -81,11 +86,13 @@ func DefaultSignature(pemEncodedPublicKey []byte) Signature {
 		SignatureMethod: Method{
 			Algorithm: "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
 		},
-		ReferenceTransforms: []Method{
-			Method{Algorithm: "http://www.w3.org/2000/09/xmldsig#enveloped-signature"},
-		},
-		DigestMethod: Method{
-			Algorithm: "http://www.w3.org/2000/09/xmldsig#sha1",
+		Reference: Reference{
+			Transforms: []Method{
+				Method{Algorithm: "http://www.w3.org/2000/09/xmldsig#enveloped-signature"},
+			},
+			DigestMethod: Method{
+				Algorithm: "http://www.w3.org/2000/09/xmldsig#sha1",
+			},
 		},
 		X509Certificate: &SignatureX509Data{
 			X509Certificate: certStr,

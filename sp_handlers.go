@@ -247,6 +247,24 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Validate signatures
+
+		if res.Signature != nil {
+			err := validateSignedNode(res.Signature, res.ID)
+			if err != nil {
+				clientErr(w, r, errors.Wrap(err, "failed to validate Response + Signature"))
+				return
+			}
+		}
+
+		if res.Assertion != nil && res.Assertion.Signature != nil {
+			err := validateSignedNode(res.Assertion.Signature, res.Assertion.ID)
+			if err != nil {
+				clientErr(w, r, errors.Wrap(err, "failed to validate Assertion + Signature"))
+				return
+			}
+		}
+
 		// Validating message.
 		signatureOK := false
 
@@ -285,7 +303,13 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 			}
 
 			if assertion.Signature != nil {
-				err := sp.verifySignature(plainTextAssertion)
+				err := validateSignedNode(assertion.Signature, assertion.ID)
+				if err != nil {
+					clientErr(w, r, errors.Wrap(err, "failed to validate Assertion + Signature"))
+					return
+				}
+
+				err = sp.verifySignature(plainTextAssertion)
 				if err != nil {
 					clientErr(w, r, errors.Wrapf(err, "Unable to verify assertion signature"))
 					return
@@ -452,4 +476,18 @@ func serverErr(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write([]byte(publicErrorMessage(err)))
+}
+
+func validateSignedNode(signature *xmlsec.Signature, nodeID string) error {
+	signatureURI := signature.Reference.URI
+	if signatureURI == "" {
+		return nil
+	}
+	if strings.HasPrefix(signatureURI, "#") {
+		if nodeID == signatureURI[1:] {
+			return nil
+		}
+		return fmt.Errorf("signed Reference.URI %q does not match ID %v", signatureURI, nodeID)
+	}
+	return fmt.Errorf("cannot lookup external URIs (%q)", signatureURI)
 }
