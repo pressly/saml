@@ -19,6 +19,12 @@ const (
 	attrNameAuthnRequest = `urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest`
 )
 
+type ValidationOptions struct {
+	DTDFile          string
+	EnableIDAttrHack bool
+	IDAttrs          []string
+}
+
 // ErrSelfSignedCertificate is a typed error returned when xmlsec1 detects a
 // self-signed certificate.
 type ErrSelfSignedCertificate struct {
@@ -194,7 +200,7 @@ func Decrypt(in []byte, privateKeyPath string) ([]byte, error) {
 }
 
 // Verify takes a signed XML document and validates its signature.
-func Verify(in []byte, publicCertPath string, dtdFile string) error {
+func Verify(in []byte, publicCertPath string, opts *ValidationOptions) error {
 
 	args := []string{
 		"xmlsec1", "--verify",
@@ -205,17 +211,7 @@ func Verify(in []byte, publicCertPath string, dtdFile string) error {
 		"--enabled-reference-uris", "empty,same-doc",
 	}
 
-	if dtdFile != "" {
-		args = append(args, []string{
-			"--dtd-file", dtdFile,
-		}...)
-	} else {
-		// This is a hack to add the given node names to the list of known IDs.
-		args = append(args, []string{
-			"--id-attr:ID", attrNameResponse,
-			"--id-attr:ID", attrNameAssertion,
-		}...)
-	}
+	applyOptions(args, opts)
 
 	args = append(args, []string{"/dev/stdin"}...)
 
@@ -272,7 +268,7 @@ func Verify(in []byte, publicCertPath string, dtdFile string) error {
 }
 
 // Sign takes a XML document and produces a signature.
-func Sign(in []byte, privateKeyPath string, dtdFile string) (out []byte, err error) {
+func Sign(in []byte, privateKeyPath string, opts *ValidationOptions) (out []byte, err error) {
 
 	args := []string{
 		"xmlsec1", "--sign",
@@ -280,17 +276,7 @@ func Sign(in []byte, privateKeyPath string, dtdFile string) (out []byte, err err
 		"--enabled-reference-uris", "empty,same-doc",
 	}
 
-	if dtdFile != "" {
-		args = append(args, []string{
-			"--dtd-file", dtdFile,
-		}...)
-	} else {
-		args = append(args, []string{
-			"--id-attr:ID", attrNameResponse,
-			"--id-attr:ID", attrNameAssertion,
-			"--id-attr:ID", attrNameAuthnRequest,
-		}...)
-	}
+	applyOptions(args, opts)
 
 	args = append(args, []string{
 		"--output", "/dev/stdout",
@@ -371,4 +357,27 @@ func xmlsecErr(s string) error {
 
 func isValidityError(output []byte) bool {
 	return bytes.Contains(output, []byte("validity error"))
+}
+
+func applyOptions(args []string, opts *ValidationOptions) {
+	if opts == nil {
+		return
+	}
+
+	if opts.DTDFile != "" {
+		args = append(args, []string{
+			"--dtd-file", opts.DTDFile,
+		}...)
+	}
+
+	if opts.EnableIDAttrHack {
+		args = append(args, []string{
+			"--id-attr:ID", attrNameResponse,
+			"--id-attr:ID", attrNameAssertion,
+			"--id-attr:ID", attrNameAuthnRequest,
+		}...)
+		for _, v := range opts.IDAttrs {
+			args = append(args, []string{"--id-attr:ID", v}...)
+		}
+	}
 }

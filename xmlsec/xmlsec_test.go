@@ -66,7 +66,10 @@ auCn/mR9IhcxbXZBGurhMxAePbxLF7MlP6a6hUy7hVT1EXD7dkvbyJ+wSn5ZZOZf
 </document>
 `)
 
-	err := Verify(badDocument, "_testdata/test.crt", "document")
+	err := Verify(badDocument, "_testdata/test.crt", &ValidationOptions{
+		IDAttrs:          []string{"document"},
+		EnableIDAttrHack: true,
+	})
 	assert.Error(t, err)
 }
 
@@ -85,7 +88,9 @@ func TestSignAndVerify(t *testing.T) {
 	` + signatureTemplate + `
 </document>`
 
-	out, err := Sign([]byte(testIn), "_testdata/test.key", "")
+	out, err := Sign([]byte(testIn), "_testdata/test.key", &ValidationOptions{
+		EnableIDAttrHack: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +139,9 @@ f2rLW19XQc67dmFb0QgmfaRVNnMeeYo6AhNRzZyM1ItVDYzao6HDAf8plk+kYZpL
 
 	assert.Equal(t, string(expectedOut), string(out))
 
-	err = Verify(out, "_testdata/test.crt", "")
+	err = Verify(out, "_testdata/test.crt", &ValidationOptions{
+		EnableIDAttrHack: true,
+	})
 	assert.NoError(t, err)
 }
 
@@ -175,7 +182,9 @@ func TestSignAndVerifyNode(t *testing.T) {
 
 	xmlDoc, err := xml.Marshal(e)
 
-	out, err := Sign([]byte(xmlDoc), "_testdata/test.key", "")
+	out, err := Sign([]byte(xmlDoc), "_testdata/test.key", &ValidationOptions{
+		EnableIDAttrHack: true,
+	})
 	if err != nil {
 		if _, ok := err.(ErrSelfSignedCertificate); !ok {
 			assert.NoError(t, err)
