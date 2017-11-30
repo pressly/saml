@@ -357,14 +357,14 @@ func xmlsecErr(s string) error {
 	if strings.Contains(err.Error(), "signature failed") {
 		return err
 	}
+	if strings.Contains(err.Error(), "validity error") {
+		return ErrValidityError{err}
+	}
 	if strings.Contains(err.Error(), "msg=self signed certificate") {
 		return ErrSelfSignedCertificate{err}
 	}
 	if strings.Contains(err.Error(), "msg=unable to get local issuer certificate") {
 		return ErrUnknownIssuer{err}
-	}
-	if strings.Contains(err.Error(), "validity error") {
-		return ErrValidityError{err}
 	}
 	return err
 }
