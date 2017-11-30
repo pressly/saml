@@ -26,6 +26,8 @@ type ServiceProvider struct {
 	MetadataURL string
 	AcsURL      string
 
+	DTDFile string
+
 	AllowIdpInitiated bool
 
 	SecurityOpts

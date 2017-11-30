@@ -4,12 +4,19 @@ package xmlsec
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
+)
+
+const (
+	attrNameResponse     = `urn:oasis:names:tc:SAML:2.0:protocol:Response`
+	attrNameAssertion    = `urn:oasis:names:tc:SAML:2.0:assertion:Assertion`
+	attrNameAuthnRequest = `urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest`
 )
 
 // ErrSelfSignedCertificate is a typed error returned when xmlsec1 detects a
@@ -31,6 +38,17 @@ type ErrUnknownIssuer struct {
 
 // Error returns the underlying error reported by xmlsec1.
 func (e ErrUnknownIssuer) Error() string {
+	return e.err.Error()
+}
+
+// ErrValidityError is a typed error returned when xmlsec1 detects a
+// "unknown issuer" error.
+type ErrValidityError struct {
+	err error
+}
+
+// Error returns the underlying error reported by xmlsec1.
+func (e ErrValidityError) Error() string {
 	return e.err.Error()
 }
 
@@ -176,16 +194,32 @@ func Decrypt(in []byte, privateKeyPath string) ([]byte, error) {
 }
 
 // Verify takes a signed XML document and validates its signature.
-func Verify(in []byte, publicCertPath string, id string) error {
-	cmd := exec.Command("xmlsec1", "--verify",
+func Verify(in []byte, publicCertPath string, dtdFile string) error {
+
+	args := []string{
+		"xmlsec1", "--verify",
 		"--pubkey-cert-pem", publicCertPath,
 		// Security: Don't ever use --enabled-reference-uris "local" value,
 		// since it'd allow potential attackers to read local files using
 		// <Reference URI="file:///etc/passwd"> hack!
 		"--enabled-reference-uris", "empty,same-doc",
-		"--id-attr:ID", id,
-		"/dev/stdin",
-	)
+	}
+
+	if dtdFile != "" {
+		args = append(args, []string{
+			"--dtd-file", dtdFile,
+		}...)
+	} else {
+		// This is a hack to add the given node names to the list of known IDs.
+		args = append(args, []string{
+			"--id-attr:ID", attrNameResponse,
+			"--id-attr:ID", attrNameAssertion,
+		}...)
+	}
+
+	args = append(args, []string{"/dev/stdin"}...)
+
+	cmd := exec.Command(args[0], args[1:]...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -227,8 +261,7 @@ func Verify(in []byte, publicCertPath string, id string) error {
 		return err
 	}
 
-	if err := cmd.Wait(); err != nil {
-
+	if err := cmd.Wait(); err != nil || isValidityError(resErr) {
 		if len(resErr) > 0 {
 			return xmlsecErr(string(res) + "\n" + string(resErr))
 		}
@@ -239,15 +272,32 @@ func Verify(in []byte, publicCertPath string, id string) error {
 }
 
 // Sign takes a XML document and produces a signature.
-func Sign(in []byte, privateKeyPath string, id string) (out []byte, err error) {
-	cmd := exec.Command("xmlsec1",
-		"--sign",
+func Sign(in []byte, privateKeyPath string, dtdFile string) (out []byte, err error) {
+
+	args := []string{
+		"xmlsec1", "--sign",
 		"--privkey-pem", privateKeyPath,
 		"--enabled-reference-uris", "empty,same-doc",
-		"--id-attr:ID", id,
+	}
+
+	if dtdFile != "" {
+		args = append(args, []string{
+			"--dtd-file", dtdFile,
+		}...)
+	} else {
+		args = append(args, []string{
+			"--id-attr:ID", attrNameResponse,
+			"--id-attr:ID", attrNameAssertion,
+			"--id-attr:ID", attrNameAuthnRequest,
+		}...)
+	}
+
+	args = append(args, []string{
 		"--output", "/dev/stdout",
 		"/dev/stdin",
-	)
+	}...)
+
+	cmd := exec.Command(args[0], args[1:]...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -289,11 +339,10 @@ func Sign(in []byte, privateKeyPath string, id string) (out []byte, err error) {
 		return nil, err
 	}
 
-	if err := cmd.Wait(); err != nil {
+	if err := cmd.Wait(); err != nil || isValidityError(resErr) {
 		if len(resErr) > 0 {
-			return res, xmlsecErr(string(resErr))
+			return res, xmlsecErr(string(res) + "\n" + string(resErr))
 		}
-
 		return nil, err
 	}
 
@@ -314,5 +363,12 @@ func xmlsecErr(s string) error {
 	if strings.Contains(err.Error(), "msg=unable to get local issuer certificate") {
 		return ErrUnknownIssuer{err}
 	}
+	if strings.Contains(err.Error(), "validity error") {
+		return ErrValidityError{err}
+	}
 	return err
+}
+
+func isValidityError(output []byte) bool {
+	return bytes.Contains(output, []byte("validity error"))
 }

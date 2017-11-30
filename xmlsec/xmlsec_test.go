@@ -85,7 +85,7 @@ func TestSignAndVerify(t *testing.T) {
 	` + signatureTemplate + `
 </document>`
 
-	out, err := Sign([]byte(testIn), "_testdata/test.key", "urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest")
+	out, err := Sign([]byte(testIn), "_testdata/test.key", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ f2rLW19XQc67dmFb0QgmfaRVNnMeeYo6AhNRzZyM1ItVDYzao6HDAf8plk+kYZpL
 
 	assert.Equal(t, string(expectedOut), string(out))
 
-	err = Verify(out, "_testdata/test.crt", "document")
+	err = Verify(out, "_testdata/test.crt", "")
 	assert.NoError(t, err)
 }
 
@@ -175,7 +175,7 @@ func TestSignAndVerifyNode(t *testing.T) {
 
 	xmlDoc, err := xml.Marshal(e)
 
-	out, err := Sign([]byte(xmlDoc), "_testdata/test.key", "urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest")
+	out, err := Sign([]byte(xmlDoc), "_testdata/test.key", "")
 	if err != nil {
 		if _, ok := err.(ErrSelfSignedCertificate); !ok {
 			assert.NoError(t, err)

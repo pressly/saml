@@ -19,11 +19,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var idAttrs = []string{
-	"urn:oasis:names:tc:SAML:2.0:protocol:Response",
-	"urn:oasis:names:tc:SAML:2.0:assertion:Assertion",
-}
-
 func parseFormAndKeepBody(r *http.Request) error {
 	var buf bytes.Buffer
 
@@ -124,29 +119,20 @@ func (sp *ServiceProvider) verifySignature(plaintextMessage []byte) error {
 		return err
 	}
 
-	var validationErr error
-	for _, idAttr := range idAttrs {
-		err := xmlsec.Verify(plaintextMessage, idpCertFile, idAttr)
-		if err == nil {
-			// No error, this message is OK
-			return nil
-		}
-
-		// We got an error...
-		if !IsSecurityException(err, &sp.SecurityOpts) {
-			// ...but it was not a security exception, so we ignore it and accept
-			// the verification.
-			return nil
-		}
-
-		// We had an error, let's try with the next ID.
-		validationErr = err
-	}
-	if validationErr != nil {
-		return validationErr
+	err = xmlsec.Verify(plaintextMessage, idpCertFile, sp.DTDFile)
+	if err == nil {
+		// No error, this message is OK
+		return nil
 	}
 
-	return errors.New("could not find validation node ID")
+	// We got an error...
+	if !IsSecurityException(err, &sp.SecurityOpts) {
+		// ...but it was not a security exception, so we ignore it and accept
+		// the verification.
+		return nil
+	}
+
+	return err
 }
 
 // AssertionMiddleware creates an HTTP handler that can be used to authenticate

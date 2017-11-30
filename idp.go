@@ -392,7 +392,7 @@ func (req *IdpAuthnRequest) MarshalAssertion() error {
 		return err
 	}
 
-	buf, err = xmlsec.Sign(buf, keyFile, "urn:oasis:names:tc:SAML:2.0:protocol")
+	buf, err = xmlsec.Sign(buf, keyFile, "")
 	if err != nil {
 		if IsSecurityException(err, &req.IDP.SecurityOpts) {
 			return err
