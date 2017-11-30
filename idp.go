@@ -392,7 +392,9 @@ func (req *IdpAuthnRequest) MarshalAssertion() error {
 		return err
 	}
 
-	buf, err = xmlsec.Sign(buf, keyFile, "")
+	buf, err = xmlsec.Sign(buf, keyFile, &xmlsec.ValidationOptions{
+		EnableIDAttrHack: true,
+	})
 	if err != nil {
 		if IsSecurityException(err, &req.IDP.SecurityOpts) {
 			return err

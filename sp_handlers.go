@@ -119,7 +119,9 @@ func (sp *ServiceProvider) verifySignature(plaintextMessage []byte) error {
 		return err
 	}
 
-	err = xmlsec.Verify(plaintextMessage, idpCertFile, sp.DTDFile)
+	err = xmlsec.Verify(plaintextMessage, idpCertFile, &xmlsec.ValidationOptions{
+		DTDFile: sp.DTDFile,
+	})
 	if err == nil {
 		// No error, this message is OK
 		return nil
