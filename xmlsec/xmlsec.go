@@ -211,7 +211,7 @@ func Verify(in []byte, publicCertPath string, opts *ValidationOptions) error {
 		"--enabled-reference-uris", "empty,same-doc",
 	}
 
-	applyOptions(args, opts)
+	applyOptions(&args, opts)
 
 	args = append(args, []string{"/dev/stdin"}...)
 
@@ -276,7 +276,7 @@ func Sign(in []byte, privateKeyPath string, opts *ValidationOptions) (out []byte
 		"--enabled-reference-uris", "empty,same-doc",
 	}
 
-	applyOptions(args, opts)
+	applyOptions(&args, opts)
 
 	args = append(args, []string{
 		"--output", "/dev/stdout",
@@ -359,25 +359,25 @@ func isValidityError(output []byte) bool {
 	return bytes.Contains(output, []byte("validity error"))
 }
 
-func applyOptions(args []string, opts *ValidationOptions) {
+func applyOptions(args *[]string, opts *ValidationOptions) {
 	if opts == nil {
 		return
 	}
 
 	if opts.DTDFile != "" {
-		args = append(args, []string{
+		*args = append(*args, []string{
 			"--dtd-file", opts.DTDFile,
 		}...)
 	}
 
 	if opts.EnableIDAttrHack {
-		args = append(args, []string{
+		*args = append(*args, []string{
 			"--id-attr:ID", attrNameResponse,
 			"--id-attr:ID", attrNameAssertion,
 			"--id-attr:ID", attrNameAuthnRequest,
 		}...)
 		for _, v := range opts.IDAttrs {
-			args = append(args, []string{"--id-attr:ID", v}...)
+			*args = append(*args, []string{"--id-attr:ID", v}...)
 		}
 	}
 }
