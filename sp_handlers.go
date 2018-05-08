@@ -19,6 +19,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Prevent IE "friendly error pages"
+// https://blogs.msdn.microsoft.com/ieinternals/2010/08/18/friendly-http-error-pages/
+var iePadding = "\n" + strings.Repeat(" ", 1024)
+
 func parseFormAndKeepBody(r *http.Request) error {
 	var buf bytes.Buffer
 
@@ -451,7 +455,7 @@ func clientErr(w http.ResponseWriter, r *http.Request, err error) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusBadRequest)
-	w.Write([]byte(publicError))
+	w.Write([]byte(publicError + iePadding))
 }
 
 func internalErr(w http.ResponseWriter, err error) {
@@ -463,7 +467,7 @@ func serverErr(w http.ResponseWriter, err error) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf8")
 	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(publicErrorMessage(err)))
+	w.Write([]byte(publicErrorMessage(err) + iePadding))
 }
 
 func validateSignedNode(signature *xmlsec.Signature, nodeID string) error {
