@@ -7,15 +7,30 @@ SP-initiated sequences.
 In order to use these servers you'll need a certificate and a passwordless
 private key. You can generate the proper keys with `openssl`:
 
+Generate SP key
 ```
 openssl req -x509 \
+  -nodes \
   -newkey rsa:4096 \
-  -keyout test.key.enc \
-  -out test.crt \
+  -keyout sp.key.enc \
+  -out sp.crt \
   -days 3650 \
   -subj "/C=CA/ST=Ontario/L=Toronto/O=Pressly/OU=Org/CN=www.pressly.com"
 
-openssl rsa -in test.key.enc -out test.key
+openssl rsa -in sp.key.enc -out sp.key
+```
+
+Generate IdP key
+```
+openssl req -x509 \
+  -nodes \
+  -newkey rsa:4096 \
+  -keyout idp.key.enc \
+  -out idp.crt \
+  -days 3650 \
+  -subj "/C=CA/ST=Ontario/L=Toronto/O=Pressly/OU=Org/CN=www.pressly.com"
+
+openssl rsa -in idp.key.enc -out idp.key
 ```
 
 You'll need two keypairs, one for the SP and the other for the IdP.
@@ -66,6 +81,10 @@ sp-server \
 ```
 
 Then go to the IdP server's public address to begin the login process.
+
+The test user credentials are:
+* username: anakin
+* password: skywalker
 
 ## SP-initiated SSP
 

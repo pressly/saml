@@ -122,7 +122,7 @@ func main() {
 	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {
 	case "sp":
-		r.Get("/", setRelayState(serviceProvider.RequestAuthHandler))
+		r.Get("/", setRelayState(serviceProvider.AuthnRequestHandler))
 		log.Printf("Go to %s to begin the SP initiated login.", *flagPublicURL)
 	}
 
