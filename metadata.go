@@ -53,9 +53,8 @@ type EntitiesDescriptor struct {
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf section 2.3.2
 type Metadata struct {
-	XMLName    xml.Name  `xml:"urn:oasis:names:tc:SAML:2.0:metadata EntityDescriptor"`
-	ValidUntil time.Time `xml:"validUntil,attr"`
-	// CacheDuration    time.Duration     `xml:"cacheDuration,attr,omitempty"`
+	XMLName          xml.Name          `xml:"urn:oasis:names:tc:SAML:2.0:metadata EntityDescriptor"`
+	ValidUntil       time.Time         `xml:"validUntil,attr"`
 	CacheDuration    *CacheDuration    `xml:"cacheDuration,attr,omitempty"`
 	EntityID         string            `xml:"entityID,attr"`
 	SPSSODescriptor  *SPSSODescriptor  `xml:"SPSSODescriptor"`
