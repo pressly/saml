@@ -135,9 +135,8 @@ func (idp *IdentityProvider) Metadata() (*Metadata, error) {
 	certStr := base64.StdEncoding.EncodeToString(cert.Bytes)
 
 	metadata := &Metadata{
-		EntityID:      idp.MetadataURL,
-		ValidUntil:    Now().Add(defaultValidDuration),
-		CacheDuration: defaultValidDuration,
+		EntityID:   idp.MetadataURL,
+		ValidUntil: Now().Add(defaultValidDuration),
 		IDPSSODescriptor: &IDPSSODescriptor{
 			ProtocolSupportEnumeration: "urn:oasis:names:tc:SAML:2.0:protocol",
 			KeyDescriptor: []KeyDescriptor{

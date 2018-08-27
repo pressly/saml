@@ -109,7 +109,7 @@ func TestGenerateIdPMetadata(t *testing.T) {
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	assert.NoError(t, err)
 
-	expectedOutput := `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" validUntil="` + Now().Add(defaultValidDuration).Format(time.RFC3339Nano) + `" cacheDuration="172800000000000" entityID="http://localhost:1233/saml/service.xml">
+	expectedOutput := `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" validUntil="` + Now().Add(defaultValidDuration).Format(time.RFC3339Nano) + `" entityID="http://localhost:1233/saml/service.xml">
 	<IDPSSODescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
 		<KeyDescriptor use="signing">
 			<KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
@@ -148,7 +148,7 @@ func TestParseAuthenticationRequest(t *testing.T) {
 	assert.NoError(t, err)
 
 	idpAuthnRequest := &IdpAuthnRequest{
-		IDP: testIdP,
+		IDP:                     testIdP,
 		ServiceProviderMetadata: sdpMetadata,
 		Request:                 *authnRequest,
 		HTTPRequest: &http.Request{
