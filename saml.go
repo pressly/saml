@@ -29,7 +29,8 @@ var Now = time.Now
 // NewID is a function that returns a unique identifier. This value can be
 // overwritten during tests.
 var NewID = func() string {
-	return fmt.Sprintf("id-%x", uuid.NewV4())
+	uid, _ := uuid.NewV4()
+	return fmt.Sprintf("id-%x", uid)
 }
 
 // GetMetadata takes the URL of a metadata.xml file, downloads and parses it.
