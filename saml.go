@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/goware/saml/xmlsec"
-	"github.com/satori/go.uuid"
+	"github.com/pborman/uuid"
 )
 
 const defaultValidDuration = time.Hour * 24 * 2
@@ -29,8 +29,7 @@ var Now = time.Now
 // NewID is a function that returns a unique identifier. This value can be
 // overwritten during tests.
 var NewID = func() string {
-	uid, _ := uuid.NewV4()
-	return fmt.Sprintf("id-%x", uid)
+	return fmt.Sprintf("id-%x", uuid.NewRandom())
 }
 
 // GetMetadata takes the URL of a metadata.xml file, downloads and parses it.
