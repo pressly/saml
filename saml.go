@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/goware/saml/xmlsec"
-	"github.com/satori/go.uuid"
 )
 
 const defaultValidDuration = time.Hour * 24 * 2
