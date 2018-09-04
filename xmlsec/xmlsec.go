@@ -213,7 +213,7 @@ func Verify(in []byte, publicCertPath string, opts *ValidationOptions) error {
 
 	applyOptions(&args, opts)
 
-	args = append(args, []string{"/dev/stdin"}...)
+	args = append(args, "/dev/stdin")
 
 	cmd := exec.Command(args[0], args[1:]...)
 
@@ -278,10 +278,10 @@ func Sign(in []byte, privateKeyPath string, opts *ValidationOptions) (out []byte
 
 	applyOptions(&args, opts)
 
-	args = append(args, []string{
+	args = append(args,
 		"--output", "/dev/stdout",
 		"/dev/stdin",
-	}...)
+	)
 
 	cmd := exec.Command(args[0], args[1:]...)
 
@@ -365,19 +365,17 @@ func applyOptions(args *[]string, opts *ValidationOptions) {
 	}
 
 	if opts.DTDFile != "" {
-		*args = append(*args, []string{
-			"--dtd-file", opts.DTDFile,
-		}...)
+		*args = append(*args, "--dtd-file", opts.DTDFile)
 	}
 
 	if opts.EnableIDAttrHack {
-		*args = append(*args, []string{
+		*args = append(*args,
 			"--id-attr:ID", attrNameResponse,
 			"--id-attr:ID", attrNameAssertion,
 			"--id-attr:ID", attrNameAuthnRequest,
-		}...)
+		)
 		for _, v := range opts.IDAttrs {
-			*args = append(*args, []string{"--id-attr:ID", v}...)
+			*args = append(*args, "--id-attr:ID", v)
 		}
 	}
 }
