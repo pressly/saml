@@ -19,24 +19,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-func parseFormAndKeepBody(r *http.Request) error {
-	var buf bytes.Buffer
-
-	// Fill buf while reading r.Body
-	r.Body = ioutil.NopCloser(io.TeeReader(r.Body, &buf))
-
-	// ParseForm reads all data from r.Body and empties it because it's a buffer.
-	if err := r.ParseForm(); err != nil {
-		return err
-	}
-
-	// Restore body so it can be read again.
-	r.Body = ioutil.NopCloser(&buf)
-	return nil
-}
-
-// AuthnRequestHandler creates an authentication assert and makes the user send it
-// to the IdP (via redirection).
+// SP-initiated login.
+// AuthnRequestHandler creates SAML 2.0 AuthnRequest and sends
+// it to the IdP via a HTTP 302 redirect. The data is passed in
+// the ?SAMLRequest query parameter and the value is base64 encoded
+// and deflate-compressed <AuthnRequest> XML element.
+// Second query parameter, RelayState, represents a final redirect
+// destination that will be invoked on successful login.
 func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -46,7 +35,7 @@ func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	authnRequest, err := sp.MakeAuthenticationRequest(destination)
+	authnRequest, err := sp.NewAuthnRequest(destination)
 	if err != nil {
 		internalErr(w, errors.Errorf("Failed to make auth request to %v: %v", destination, err))
 		return
@@ -85,10 +74,9 @@ func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Re
 
 	w.Header().Add("Location", redirectURL)
 	w.WriteHeader(http.StatusFound)
-	return
 }
 
-// MetadataHandler creates and serves a metadata XML file.
+// MetadataHandler serves SAML 2.0 Service Provider metadata XML file.
 func (sp *ServiceProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := sp.Metadata()
 	if err != nil {
@@ -424,6 +412,22 @@ func (sp *ServiceProvider) AssertionMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), "saml.assertion", assertion)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func parseFormAndKeepBody(r *http.Request) error {
+	var buf bytes.Buffer
+
+	// Fill buf while reading r.Body
+	r.Body = ioutil.NopCloser(io.TeeReader(r.Body, &buf))
+
+	// ParseForm reads all data from r.Body and empties it because it's a buffer.
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
+
+	// Restore body so it can be read again.
+	r.Body = ioutil.NopCloser(&buf)
+	return nil
 }
 
 func publicErrorMessage(err error) string {

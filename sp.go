@@ -234,9 +234,8 @@ func (sp *ServiceProvider) Metadata() (*Metadata, error) {
 	return metadata, nil
 }
 
-// MakeAuthenticationRequest produces a new AuthnRequest object for the given
-// idpURL.
-func (sp *ServiceProvider) MakeAuthenticationRequest(idpURL string) (*AuthnRequest, error) {
+// NewAuthnRequest creates a new AuthnRequest object for the given IdP URL.
+func (sp *ServiceProvider) NewAuthnRequest(idpURL string) (*AuthnRequest, error) {
 	req := AuthnRequest{
 		AssertionConsumerServiceURL: sp.AcsURL,
 		Destination:                 idpURL,

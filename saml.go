@@ -22,7 +22,7 @@ const IssueLifetime = time.Second * 90
 // tolerance to assertion's NotBefore and NotOnOrAfter
 var ClockDriftTolerance = time.Duration(0)
 
-// Now is a function that returns the current time. This vale can be
+// Now is a function that returns the current time. This value can be
 // overwritten during tests.
 var Now = time.Now
 
