@@ -19,61 +19,44 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SP-initiated login.
-// AuthnRequestHandler creates SAML 2.0 AuthnRequest and sends
-// it to the IdP via a HTTP 302 redirect. The data is passed in
-// the ?SAMLRequest query parameter and the value is base64 encoded
-// and deflate-compressed <AuthnRequest> XML element.
-// Second query parameter, RelayState, represents a final redirect
-// destination that will be invoked on successful login.
-func (sp *ServiceProvider) AuthnRequestHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
+// AuthnRequestURL creates SAML 2.0 AuthnRequest redirect URL,
+// aka SP-initiated login (SP->IdP).
+// The data is passed in the ?SAMLRequest query parameter and
+// the value is base64 encoded and deflate-compressed <AuthnRequest>
+// XML element. The final redirect destination that will be invoked
+// on successful login is passed using ?RelayState query parameter.
+func (sp *ServiceProvider) AuthnRequestURL(relayState string) (string, error) {
 	destination, err := sp.GetIdPAuthResource()
 	if err != nil {
-		internalErr(w, errors.Errorf("GetIdPAuthResource: %v", err))
-		return
+		return "", errors.Wrap(err, "failed to get IdP destination")
 	}
 
 	authnRequest, err := sp.NewAuthnRequest(destination)
 	if err != nil {
-		internalErr(w, errors.Errorf("Failed to make auth request to %v: %v", destination, err))
-		return
+		return "", errors.Wrapf(err, "failed to make auth request to %v", destination)
 	}
 
 	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
 	if err != nil {
-		internalErr(w, errors.Errorf("Failed to marshal auth request %v", err))
-		return
+		return "", errors.Wrap(err, "Failed to marshal auth request")
 	}
 
-	// RelayState is an opaque string that can be used to keep track of this
-	// session on our side.
-	var relayState string
-	token := ctx.Value("saml.RelayState")
-	if token != nil {
-		relayState, _ = token.(string)
-	}
-
-	fbuf := bytes.NewBuffer(nil)
-	fwri, err := flate.NewWriter(fbuf, flate.DefaultCompression)
+	flateBuf := bytes.NewBuffer(nil)
+	flateWriter, err := flate.NewWriter(flateBuf, flate.DefaultCompression)
 	if err != nil {
-		internalErr(w, errors.Errorf("Failed to build buffer %v", err))
-		return
+		return "", errors.Wrap(err, "failed to create flate writer")
 	}
 
-	_, err = fwri.Write(buf)
+	_, err = flateWriter.Write(buf)
 	if err != nil {
-		internalErr(w, errors.Errorf("Failed to write to buffer %v", err))
-		return
+		return "", errors.Wrap(err, "failed to write to flate writer")
 	}
-	fwri.Close()
-	message := base64.StdEncoding.EncodeToString(fbuf.Bytes())
+	flateWriter.Close()
+	message := base64.StdEncoding.EncodeToString(flateBuf.Bytes())
 
 	redirectURL := destination + fmt.Sprintf(`?RelayState=%s&SAMLRequest=%s`, url.QueryEscape(relayState), url.QueryEscape(message))
 
-	w.Header().Add("Location", redirectURL)
-	w.WriteHeader(http.StatusFound)
+	return redirectURL, nil
 }
 
 // MetadataHandler serves SAML 2.0 Service Provider metadata XML file.
