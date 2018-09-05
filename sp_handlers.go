@@ -102,7 +102,9 @@ func (sp *ServiceProvider) verifySignature(plaintextMessage []byte) error {
 	return err
 }
 
-func (sp *ServiceProvider) parseSAMLResponse(samlResponse string) (*Response, error) {
+func (sp *ServiceProvider) AssertResponse(samlResponse string) (*Assertion, error) {
+	now := Now()
+
 	samlResponseXML, err := base64.StdEncoding.DecodeString(samlResponse)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to base64-decode SAML response")
@@ -112,17 +114,6 @@ func (sp *ServiceProvider) parseSAMLResponse(samlResponse string) (*Response, er
 	err = xml.Unmarshal(samlResponseXML, &res)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal XML document: %s", string(samlResponseXML))
-	}
-
-	return &res, nil
-}
-
-func (sp *ServiceProvider) AssertResponse(samlResponse string) (*Assertion, error) {
-	now := Now()
-
-	res, err := sp.parseSAMLResponse(samlResponse)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse SAML response")
 	}
 
 	// TODO: Do we really need to check the IdP metadata here?
@@ -192,7 +183,7 @@ func (sp *ServiceProvider) AssertResponse(samlResponse string) (*Assertion, erro
 	signatureOK := false
 
 	if res.Signature != nil || (res.Assertion != nil && res.Assertion.Signature != nil) {
-		err := sp.verifySignature([]byte(samlResponse))
+		err := sp.verifySignature(samlResponseXML)
 		if err != nil {
 			return nil, errors.Wrap(err, "Unable to verify message signature")
 		} else {
