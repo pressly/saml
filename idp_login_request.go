@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/xml"
+	"log"
 	"net/http"
 	"text/template"
 )
@@ -47,7 +48,7 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 
 	sess, err := lr.authFn(w, r)
 	if err != nil {
-		Logf("authFn: %v", err)
+		log.Printf("authFn: %v", err)
 		return
 	}
 
@@ -61,28 +62,28 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = idpAuthnRequest.MakeAssertion(sess); err != nil {
-		Logf("Failed to build assertion %v", err)
+		log.Printf("Failed to build assertion %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	err = idpAuthnRequest.MarshalAssertion()
 	if err != nil {
-		Logf("Failed to marshal assertion %v", err)
+		log.Printf("Failed to marshal assertion %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	err = idpAuthnRequest.MakeResponse()
 	if err != nil {
-		Logf("Failed to build response %v", err)
+		log.Printf("Failed to build response %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	buf, err := xml.MarshalIndent(idpAuthnRequest.Response, "", "\t")
 	if err != nil {
-		Logf("Failed to format response %v", err)
+		log.Printf("Failed to format response %v", err)
 		writeErr(w, err)
 		return
 	}
@@ -103,14 +104,14 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 
 	formTpl, err := template.New("").Parse(redirectFormTemplate)
 	if err != nil {
-		Logf("Failed to create form %v", err)
+		log.Printf("Failed to create form %v", err)
 		writeErr(w, err)
 		return
 	}
 
 	formBuf := bytes.NewBuffer(nil)
 	if err := formTpl.Execute(formBuf, form); err != nil {
-		Logf("Failed to build form %v", err)
+		log.Printf("Failed to build form %v", err)
 		writeErr(w, err)
 		return
 	}
