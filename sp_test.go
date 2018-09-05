@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"testing"
 	"time"
+
 	//"log"
 
 	"github.com/stretchr/testify/assert"
@@ -140,7 +141,7 @@ func TestGenerateSPMetadata(t *testing.T) {
 func TestMakeAuthenticationRequest(t *testing.T) {
 	tearUp()
 
-	req, err := testSP.MakeAuthenticationRequest(testIdP.SSOURL)
+	req, err := testSP.NewAuthnRequest(testIdP.SSOURL)
 	assert.NoError(t, err)
 
 	out, err := xml.MarshalIndent(req, "", "\t")

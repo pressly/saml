@@ -141,7 +141,7 @@ func TestGenerateIdPMetadata(t *testing.T) {
 func TestParseAuthenticationRequest(t *testing.T) {
 	tearUp()
 
-	authnRequest, err := testSP.MakeAuthenticationRequest(testIdP.SSOURL)
+	authnRequest, err := testSP.NewAuthnRequest(testIdP.SSOURL)
 	assert.NoError(t, err)
 
 	sdpMetadata, err := testSP.Metadata()
