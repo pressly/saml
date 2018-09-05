@@ -59,21 +59,19 @@ func (sp *ServiceProvider) AuthnRequestURL(relayState string) (string, error) {
 	return redirectURL, nil
 }
 
-// MetadataHandler serves SAML 2.0 Service Provider metadata XML file.
-func (sp *ServiceProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
+// MetadataXML returns SAML 2.0 Service Provider metadata XML.
+func (sp *ServiceProvider) MetadataXML() ([]byte, error) {
 	metadata, err := sp.Metadata()
 	if err != nil {
-		internalErr(w, errors.Wrapf(err, "could not build nor serve metadata XML"))
-		return
+		return nil, errors.Wrap(err, "could not build nor serve metadata XML")
 	}
+
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	if err != nil {
-		internalErr(w, errors.Wrapf(err, "could not format metadata"))
-		return
+		return nil, errors.Wrap(err, "could not format metadata")
 	}
-	w.Header().Set("Content-Type", "application/xml; charset=utf8")
-	w.Write([]byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"))
-	w.Write(out)
+
+	return out, nil
 }
 
 func (sp *ServiceProvider) possibleResponseIDs() []string {
