@@ -88,7 +88,7 @@ func DefaultSignature(pemEncodedPublicKey []byte) Signature {
 		},
 		Reference: Reference{
 			Transforms: []Method{
-				Method{Algorithm: "http://www.w3.org/2000/09/xmldsig#enveloped-signature"},
+				{Algorithm: "http://www.w3.org/2000/09/xmldsig#enveloped-signature"},
 			},
 			DigestMethod: Method{
 				Algorithm: "http://www.w3.org/2000/09/xmldsig#sha1",
