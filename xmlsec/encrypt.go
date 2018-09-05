@@ -12,7 +12,7 @@ type EncryptedData struct {
 
 // CipherData represents the <CipherData> tag.
 type CipherData struct {
-	CipherValue string `xml"CipherValue"`
+	CipherValue string `xml:"CipherValue"`
 }
 
 // KeyInfo represents the <KeyInfo> tag.
