@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/goware/saml"
+	"github.com/pressly/api/lib/ws"
 )
 
 var (
@@ -25,13 +26,25 @@ var (
 	flagHelp = flag.Bool("help", false, "Display help")
 )
 
+var (
+	serviceProvider saml.ServiceProvider
+)
+
 const (
 	metadataPath = "/metadata.xml"
 	acsPath      = "/saml/acs"
 )
 
 func accessGrantedHandler(w http.ResponseWriter, r *http.Request) {
-	assertion := saml.GetAssertionFromCtx(r.Context())
+	if err := r.ParseForm(); err != nil {
+		ws.Respond(w, r, 400, err)
+		return
+	}
+	assertion, err := serviceProvider.AssertResponse(r.Form.Get("SAMLResponse"))
+	if err != nil {
+		ws.Respond(w, r, 400, err)
+		return
+	}
 
 	r.ParseForm()
 
@@ -67,6 +80,31 @@ func logHandler(next http.Handler) http.Handler {
 	})
 }
 
+func metadataHandler(w http.ResponseWriter, r *http.Request) {
+	xml, err := serviceProvider.MetadataXML()
+	if err != nil {
+		ws.Respond(w, r, 500, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf8")
+	w.Write([]byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"))
+	w.Write(xml)
+}
+
+func authRequestHandler(w http.ResponseWriter, r *http.Request) {
+	successRedirectURL := r.FormValue("redirect_url")
+
+	idpRedirectURL, err := serviceProvider.AuthnRequestURL(successRedirectURL)
+	if err != nil {
+		ws.Respond(w, r, 500, err)
+		return
+	}
+
+	w.Header().Add("Location", idpRedirectURL)
+	w.WriteHeader(http.StatusFound)
+}
+
 func setRelayState(nextFn func(w http.ResponseWriter, r *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), "saml.RelayState", *flagRelayState)
@@ -97,7 +135,7 @@ func main() {
 		log.Fatal("Missing -privkey-pem")
 	}
 
-	serviceProvider := saml.ServiceProvider{
+	serviceProvider = saml.ServiceProvider{
 		CertFile: *flagPubCert,
 		KeyFile:  *flagPrivKey,
 
@@ -114,15 +152,14 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(logHandler)
 
-	r.Get(metadataPath, serviceProvider.MetadataHandler)
+	r.Get(metadataPath, metadataHandler)
 
-	r.With(serviceProvider.AssertionMiddleware).
-		Post(acsPath, accessGrantedHandler)
+	r.Post(acsPath, accessGrantedHandler)
 
 	log.Printf("Test SP server listening at %s (%s)", *flagListenAddr, *flagPublicURL)
 	switch *flagInitiatedBy {
 	case "sp":
-		r.Get("/", setRelayState(serviceProvider.AuthnRequestHandler))
+		r.Get("/", setRelayState(authRequestHandler))
 		log.Printf("Go to %s to begin the SP initiated login.", *flagPublicURL)
 	}
 
