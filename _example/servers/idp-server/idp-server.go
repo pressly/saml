@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"log"
 	"net/http"
 
 	"github.com/goware/saml"
+	"github.com/pkg/errors"
 	"github.com/pressly/chi"
 
 	"time"
@@ -46,6 +46,54 @@ var validUsers = []user{
 		loginHandler: "anakin",
 		Password:     "skywalker",
 	},
+}
+
+var (
+	identityProvider saml.IdentityProvider
+)
+
+func spInitiatedLogin(w http.ResponseWriter, r *http.Request) {
+	sess, err := authFn(w, r)
+	if err != nil {
+		http.Error(w, errors.Wrap(err, "failed to authenticate user").Error(), 500)
+		return
+	}
+
+	ctx := r.Context()
+	relayState := ctx.Value("relayState").(string)
+	samlRequest := ctx.Value("samlRequest").(string)
+
+	samlResponse, err := identityProvider.ProcessRequest(samlRequest, relayState, sess, r.RemoteAddr)
+	if err != nil {
+		http.Error(w, errors.Wrap(err, "failed to process saml request").Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(samlResponse)
+}
+
+func redirectBindingCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		values := r.URL.Query()
+		ctx = context.WithValue(ctx, "relayState", values.Get("RelayState"))
+		ctx = context.WithValue(ctx, "samlRequest", values.Get("SAMLRequest"))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func postBindingCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, errors.Wrap(err, "failed to parse form").Error(), 400)
+			return
+		}
+		ctx = context.WithValue(ctx, "relayState", r.Form.Get("RelayState"))
+		ctx = context.WithValue(ctx, "samlRequest", r.Form.Get("SAMLRequest"))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // authFn validates user credentials and creates a
@@ -167,7 +215,7 @@ func main() {
 		log.Fatal("Missing -privkey-pem")
 	}
 
-	identityProvider := saml.IdentityProvider{
+	identityProvider = saml.IdentityProvider{
 		CertFile: *flagPubCert,
 		KeyFile:  *flagPrivKey,
 
@@ -194,7 +242,8 @@ func main() {
 		r.Get(initiatePath, initiateLogin(&identityProvider))
 		log.Printf("Go to %s to begin the IdP initiated login.", *flagPublicURL)
 	case "sp":
-		r.Get(ssoPath, identityProvider.ServeSSO(authFn))
+		r.With(redirectBindingCtx).Get(ssoPath, spInitiatedLogin)
+		r.With(postBindingCtx).Post(ssoPath, spInitiatedLogin)
 	}
 
 	log.Fatal(http.ListenAndServe(*flagListenAddr, r))
