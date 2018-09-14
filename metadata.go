@@ -27,7 +27,6 @@ package saml
 import (
 	"encoding/xml"
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -78,8 +77,6 @@ func (metadata *Metadata) Cert() string {
 }
 
 func (metadata *Metadata) SSOService(binding string) *Endpoint {
-	log.Printf("Metadata.SSOService - binding: %v", binding)
-	log.Printf("IDPSSODescriptor: %+v", metadata.IDPSSODescriptor)
 	if metadata.IDPSSODescriptor == nil {
 		return nil
 	}
