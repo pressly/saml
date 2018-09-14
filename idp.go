@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/goware/saml/xmlsec"
+	"github.com/pkg/errors"
 )
 
 // Session represents a user session. It is returned by the
@@ -37,8 +37,11 @@ type Session struct {
 
 // IdpAuthnRequest is used by IdentityProvider to handle a single authentication request.
 type IdpAuthnRequest struct {
-	IDP                     *IdentityProvider
-	HTTPRequest             *http.Request
+	IDP *IdentityProvider
+
+	// Address set in the SubjectConfirmation element of the Assertion
+	Address string
+
 	RelayState              string
 	RequestBuffer           []byte
 	Request                 AuthnRequest
@@ -70,6 +73,23 @@ type IdentityProvider struct {
 	SecurityOpts
 
 	pemCert atomic.Value
+}
+
+type IdPSettings struct {
+	// Identifier of the SP entity (must be a URI)
+	EntityID string
+
+	// File system location of the cert file
+	CertFile string
+	// Cert can also be provided as a param
+	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
+	PubkeyPEM string
+
+	// SAML protocol binding to be used when sending the <AuthnRequest> message
+	SSOServiceBinding string
+
+	// URL Target of the IdP where the SP will send the AuthnRequest message
+	SSOServiceURL string
 }
 
 // PrivkeyFile returns a physical path where the IdP's key can be accessed.
@@ -130,7 +150,7 @@ func (idp *IdentityProvider) Cert() (*pem.Block, error) {
 func (idp *IdentityProvider) Metadata() (*Metadata, error) {
 	cert, err := idp.Cert()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get cert")
 	}
 	certStr := base64.StdEncoding.EncodeToString(cert.Bytes)
 
@@ -326,7 +346,7 @@ func (req *IdpAuthnRequest) MakeAssertion(session *Session) error {
 			SubjectConfirmation: &SubjectConfirmation{
 				Method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
 				SubjectConfirmationData: SubjectConfirmationData{
-					Address:      req.HTTPRequest.RemoteAddr,
+					Address:      req.Address,
 					InResponseTo: req.Request.ID,
 					NotOnOrAfter: Now().Add(IssueLifetime),
 					Recipient: func() string {
@@ -363,7 +383,7 @@ func (req *IdpAuthnRequest) MakeAssertion(session *Session) error {
 			AuthnInstant: session.CreateTime,
 			SessionIndex: session.Index,
 			SubjectLocality: SubjectLocality{
-				Address: req.HTTPRequest.RemoteAddr,
+				Address: req.Address,
 			},
 			AuthnContext: AuthnContext{
 				AuthnContextClassRef: &AuthnContextClassRef{

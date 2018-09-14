@@ -27,6 +27,7 @@ package saml
 import (
 	"encoding/xml"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -59,6 +60,36 @@ type Metadata struct {
 	EntityID         string            `xml:"entityID,attr"`
 	SPSSODescriptor  *SPSSODescriptor  `xml:"SPSSODescriptor"`
 	IDPSSODescriptor *IDPSSODescriptor `xml:"IDPSSODescriptor"`
+}
+
+func (metadata *Metadata) Cert() string {
+	// TODO: review logic for getting cert from metadata
+	for _, keyDescriptor := range metadata.IDPSSODescriptor.KeyDescriptor {
+		if keyDescriptor.Use == "encryption" {
+			return keyDescriptor.KeyInfo.Certificate
+		}
+	}
+	for _, keyDescriptor := range metadata.IDPSSODescriptor.KeyDescriptor {
+		if keyDescriptor.KeyInfo.Certificate != "" {
+			return keyDescriptor.KeyInfo.Certificate
+		}
+	}
+	return ""
+}
+
+func (metadata *Metadata) SSOService(binding string) *Endpoint {
+	log.Printf("Metadata.SSOService - binding: %v", binding)
+	log.Printf("IDPSSODescriptor: %+v", metadata.IDPSSODescriptor)
+	if metadata.IDPSSODescriptor == nil {
+		return nil
+	}
+
+	for _, endpoint := range metadata.IDPSSODescriptor.SingleSignOnService {
+		if binding == endpoint.Binding {
+			return &endpoint
+		}
+	}
+	return nil
 }
 
 // KeyDescriptor represents the XMLSEC object of the same name

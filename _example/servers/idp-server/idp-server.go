@@ -63,7 +63,7 @@ func spInitiatedLogin(w http.ResponseWriter, r *http.Request) {
 	relayState := ctx.Value("relayState").(string)
 	samlRequest := ctx.Value("samlRequest").(string)
 
-	samlResponse, err := identityProvider.ProcessRequest(samlRequest, relayState, sess, r.RemoteAddr)
+	samlResponse, err := identityProvider.GenerateResponse(samlRequest, relayState, sess, r.RemoteAddr)
 	if err != nil {
 		http.Error(w, errors.Wrap(err, "failed to process saml request").Error(), 500)
 		return

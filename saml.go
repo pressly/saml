@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/goware/saml/xmlsec"
+	"github.com/pkg/errors"
 )
 
 const defaultValidDuration = time.Hour * 24 * 2
@@ -37,19 +38,19 @@ var NewID = func() string {
 func GetMetadata(metadataURL string) (*Metadata, error) {
 	res, err := http.Get(metadataURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to get url: %v", metadataURL)
 	}
 	defer res.Body.Close()
 
 	buf, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to read body from url: %v", metadataURL)
 	}
 
 	var metadata Metadata
 	err = xml.Unmarshal(buf, &metadata)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to unmarshal body: %v", string(buf))
 	}
 
 	return &metadata, nil

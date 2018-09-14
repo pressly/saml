@@ -1,14 +1,18 @@
 package saml
 
 import (
+	"bytes"
+	"compress/flate"
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
-	"errors"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"sync/atomic"
+
+	"github.com/pkg/errors"
 )
 
 // ServiceProvider represents a service provider.
@@ -33,6 +37,37 @@ type ServiceProvider struct {
 	SecurityOpts
 
 	pemCert atomic.Value
+
+	// Service Provider Settings
+	Settings SPSettings
+
+	// Identity Provider settings the Service Provider instance should use
+	IdPSettings IdPSettings
+}
+
+type SPSettings struct {
+	// Identifier of the SP entity  (must be a URI)
+	EntityID string
+
+	// Assertion Consumer Service URL
+	// Specifies where the <AuthnResponse> message MUST be returned to
+	ACSURL string
+
+	// SAML protocol binding to be used when returning the <Response> message.
+	// Supports only HTTP-POST binding
+	ACSBinding string
+
+	// File system location of the private key file
+	KeyFile string
+	// Private key can also be provided as a param
+	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
+	PrivkeyPEM string
+
+	// File system location of the cert file
+	CertFile string
+	// Cert can also be provided as a param
+	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
+	PubkeyPEM string
 }
 
 // PrivkeyFile returns a physical path where the SP's key can be accessed.
@@ -58,56 +93,12 @@ func (sp *ServiceProvider) PubkeyFile() (string, error) {
 	return "", errors.New("No public key given.")
 }
 
-// GetIdPAuthResource returns the authentication URL for the SP.
-func (sp *ServiceProvider) GetIdPAuthResource() (string, error) {
-	meta, err := sp.GetIdPMetadata()
-	if err != nil {
-		return "", err
-	}
-
-	if meta.IDPSSODescriptor == nil {
-		return "", errors.New("could not find IDPSSODescriptor")
-	}
-
-	for _, endpoint := range meta.IDPSSODescriptor.SingleSignOnService {
-		if endpoint.Binding == "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" {
-			return endpoint.Location, nil
-		}
-		if endpoint.Binding == "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" {
-			return endpoint.Location, nil
-		}
-	}
-
-	return "", errors.New("could not find SingleSignOnService")
-}
-
 // GetIdPCertFile returns a physical path where the IdP certificate can be
 // accessed.
 func (sp *ServiceProvider) GetIdPCertFile() (string, error) {
-	meta, err := sp.GetIdPMetadata()
-	if err != nil {
-		return "", err
-	}
-
-	cert := ""
-	for _, keyDescriptor := range meta.IDPSSODescriptor.KeyDescriptor {
-		if keyDescriptor.Use == "encryption" {
-			cert = keyDescriptor.KeyInfo.Certificate
-			break
-		}
-	}
-
+	cert := sp.IdPSettings.PubkeyPEM
 	if cert == "" {
-		for _, keyDescriptor := range meta.IDPSSODescriptor.KeyDescriptor {
-			if keyDescriptor.KeyInfo.Certificate != "" {
-				cert = keyDescriptor.KeyInfo.Certificate
-				break
-			}
-		}
-	}
-
-	if cert == "" {
-		return "", errors.New("Missing certificate data.")
+		return "", errors.New("missing idp certificate")
 	}
 
 	certBytes, _ := base64.StdEncoding.DecodeString(cert)
@@ -120,40 +111,34 @@ func (sp *ServiceProvider) GetIdPCertFile() (string, error) {
 	return writeFile(certBytes)
 }
 
-// GetIdPMetadata returns the IdP metadata value.
-func (sp *ServiceProvider) GetIdPMetadata() (*Metadata, error) {
-	if sp.IdPMetadata != nil {
-		m := *(sp.IdPMetadata)
-		return &m, nil
-	}
-
-	if len(sp.IdPMetadataXML) == 0 {
-		if sp.IdPMetadataURL == "" {
-			return nil, errors.New("Missing metadata URL.")
+func (sp *ServiceProvider) ParseIdPMetadata() (*Metadata, error) {
+	var metadata *Metadata
+	switch {
+	case len(sp.IdPMetadataXML) > 0:
+		if err := xml.Unmarshal(sp.IdPMetadataXML, &metadata); err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal metadata: %v", string(sp.IdPMetadataXML))
 		}
-
+	case sp.IdPMetadataURL != "":
 		res, err := http.Get(sp.IdPMetadataURL)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "failed to get %q", sp.IdPMetadataURL)
 		}
 		defer res.Body.Close()
 
 		buf, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "failed to read body from %q", sp.IdPMetadataURL)
 		}
-
-		sp.IdPMetadataXML = buf
+		if err := xml.Unmarshal(buf, &metadata); err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal body: %+v", string(buf))
+		}
 	}
 
-	var metadata Metadata
-	err := xml.Unmarshal(sp.IdPMetadataXML, &metadata)
-	if err != nil {
-		return nil, err
+	if metadata == nil {
+		return nil, errors.Errorf("missing idp metadata xml/url")
 	}
 
-	sp.IdPMetadata = &metadata
-	return &metadata, nil
+	return metadata, nil
 }
 
 // Cert returns a *pem.Block value that corresponds to the SP's certificate.
@@ -164,23 +149,23 @@ func (sp *ServiceProvider) Cert() (*pem.Block, error) {
 
 	certFile, err := sp.PubkeyFile()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get sp cert key file")
 	}
 
 	fp, err := os.Open(certFile)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to open sp cert file: %v", certFile)
 	}
 	defer fp.Close()
 
 	buf, err := ioutil.ReadAll(fp)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to read sp cert file")
 	}
 
 	cert, _ := pem.Decode(buf)
 	if cert == nil {
-		return nil, errors.New("Invalid certificate.")
+		return nil, errors.New("invalid sp certificate")
 	}
 
 	sp.pemCert.Store(cert)
@@ -192,7 +177,7 @@ func (sp *ServiceProvider) Cert() (*pem.Block, error) {
 func (sp *ServiceProvider) Metadata() (*Metadata, error) {
 	cert, err := sp.Cert()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get sp cert")
 	}
 	certStr := base64.StdEncoding.EncodeToString(cert.Bytes)
 
@@ -234,11 +219,54 @@ func (sp *ServiceProvider) Metadata() (*Metadata, error) {
 	return metadata, nil
 }
 
+// NewSAMLRequest creates SAML 2.0 AuthnRequest
+// The <AuthnRequest> XML element is deflate-compressed, base64 and URL encoded
+func (sp *ServiceProvider) NewRedirectSAMLRequest() (string, error) {
+	authnRequest, err := sp.NewAuthnRequest()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create auth request")
+	}
+
+	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to marshal auth request")
+	}
+
+	flateBuf := bytes.NewBuffer(nil)
+	flateWriter, err := flate.NewWriter(flateBuf, flate.DefaultCompression)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create flate writer")
+	}
+
+	_, err = flateWriter.Write(buf)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to write to flate writer")
+	}
+	flateWriter.Close()
+	return url.QueryEscape(base64.StdEncoding.EncodeToString(flateBuf.Bytes())), nil
+}
+
+// NewSAMLRequest creates SAML 2.0 AuthnRequest
+// The <AuthnRequest> XML element is base64 encoded
+func (sp *ServiceProvider) NewPostSAMLRequest() (string, error) {
+	authnRequest, err := sp.NewAuthnRequest()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create auth request")
+	}
+
+	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to marshal auth request")
+	}
+
+	return base64.StdEncoding.EncodeToString(buf), nil
+}
+
 // NewAuthnRequest creates a new AuthnRequest object for the given IdP URL.
-func (sp *ServiceProvider) NewAuthnRequest(idpURL string) (*AuthnRequest, error) {
+func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
 	req := AuthnRequest{
 		AssertionConsumerServiceURL: sp.AcsURL,
-		Destination:                 idpURL,
+		Destination:                 sp.IdPSettings.SSOServiceURL,
 		ID:                          NewID(),
 		IssueInstant:                Now(),
 		Version:                     "2.0",
