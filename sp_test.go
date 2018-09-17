@@ -98,6 +98,9 @@ zQUwDSgIrjoMPWcFNGu2pzSnQWWU7BB+DpX3jb7kHC/mLFj3M2Fxv7bCK51HWI6h
 
 	MetadataURL: "http://localhost:1235/saml/service.xml",
 	AcsURL:      "http://localhost:1235/saml/acs",
+	IdPSettings: IdPSettings{
+		SSOServiceURL: testIdP.SSOURL,
+	},
 }
 
 func TestGenerateSPMetadata(t *testing.T) {
@@ -141,7 +144,7 @@ func TestGenerateSPMetadata(t *testing.T) {
 func TestMakeAuthenticationRequest(t *testing.T) {
 	tearUp()
 
-	req, err := testSP.NewAuthnRequest(testIdP.SSOURL)
+	req, err := testSP.NewAuthnRequest()
 	assert.NoError(t, err)
 
 	out, err := xml.MarshalIndent(req, "", "\t")
