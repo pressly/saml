@@ -54,42 +54,37 @@ type IdpAuthnRequest struct {
 
 // IdentityProvider represents an identity provider.
 type IdentityProvider struct {
-	KeyFile  string
-	CertFile string
 
-	PrivkeyPEM string
-	PubkeyPEM  string
+	// Identifier of the IdP entity  (must be a URI)
+	EntityID string
 
-	SSOURL      string
 	MetadataURL string
 
-	SPMetadataURL string
-	SPMetadata    *Metadata
-
-	SPAcsURL string
-
-	EntityID string
+	SSOURL string
 
 	SecurityOpts
 
-	pemCert atomic.Value
-}
-
-type IdPSettings struct {
-	// Identifier of the SP entity (must be a URI)
-	EntityID string
+	// File system location of the private key file
+	KeyFile string
 
 	// File system location of the cert file
 	CertFile string
+
+	// Private key can also be provided as a param
+	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
+	PrivkeyPEM string
+
 	// Cert can also be provided as a param
 	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
 	PubkeyPEM string
 
-	// SAML protocol binding to be used when sending the <AuthnRequest> message
-	SSOServiceBinding string
+	pemCert atomic.Value
 
-	// URL Target of the IdP where the SP will send the AuthnRequest message
-	SSOServiceURL string
+	// Service provide settings
+	SPMetadataURL string
+	SPMetadata    *Metadata
+
+	SPAcsURL string
 }
 
 // PrivkeyFile returns a physical path where the IdP's key can be accessed.
@@ -100,7 +95,7 @@ func (idp *IdentityProvider) PrivkeyFile() (string, error) {
 	if idp.PrivkeyPEM != "" {
 		return writeFile([]byte(idp.PrivkeyPEM))
 	}
-	return "", errors.New("No private key given.")
+	return "", errors.New("missing idp private key")
 }
 
 // PubkeyFile returns a physical path where the IdP's public key can be
@@ -112,7 +107,7 @@ func (idp *IdentityProvider) PubkeyFile() (string, error) {
 	if idp.PubkeyPEM != "" {
 		return validateKeyFile(writeFile([]byte(idp.PubkeyPEM)))
 	}
-	return "", errors.New("No public key given.")
+	return "", errors.New("missing idp public key")
 }
 
 // Cert returns a *pem.Block value that corresponds to the IdP's certificate.
@@ -138,7 +133,7 @@ func (idp *IdentityProvider) Cert() (*pem.Block, error) {
 
 	cert, _ := pem.Decode(buf)
 	if cert == nil {
-		return nil, errors.New("Invalid certificate.")
+		return nil, errors.New("failed to decode idp cert")
 	}
 
 	idp.pemCert.Store(cert)
@@ -482,7 +477,7 @@ func (req *IdpAuthnRequest) MakeResponse() error {
 		},
 	}
 	if req.Response.Destination == "" {
-		return errors.New(`Missing "Destination"`)
+		return errors.New("missing response destination")
 	}
 	return nil
 }
@@ -496,7 +491,7 @@ func (idp *IdentityProvider) GetSPCertFile() (string, error) {
 	}
 
 	if meta.SPSSODescriptor == nil {
-		return "", errors.New("Missing SPSSODescriptor data")
+		return "", errors.New("missing sp sso descriptor")
 	}
 
 	cert := ""
@@ -517,7 +512,7 @@ func (idp *IdentityProvider) GetSPCertFile() (string, error) {
 	}
 
 	if cert == "" {
-		return "", errors.New("Missing certificate data.")
+		return "", errors.New("missing sp cert")
 	}
 
 	certBytes, _ := base64.StdEncoding.DecodeString(cert)
@@ -538,7 +533,7 @@ func (idp *IdentityProvider) GetSPMetadata() (*Metadata, error) {
 	}
 
 	if idp.SPMetadataURL == "" {
-		return nil, errors.New("Missing metadata URL.")
+		return nil, errors.New("missing sp metadata url")
 	}
 
 	res, err := http.Get(idp.SPMetadataURL)

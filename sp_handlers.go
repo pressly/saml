@@ -20,11 +20,15 @@ import (
 // XML element. The final redirect destination that will be invoked
 // on successful login is passed using ?RelayState query parameter.
 func (sp *ServiceProvider) AuthnRequestURL(relayState string) (string, error) {
+	if sp.IdPSSOServiceURL == "" {
+		return "", errors.Errorf("missing idp sso service url")
+	}
+
 	samlRequest, err := sp.NewRedirectSAMLRequest()
 	if err != nil {
 		return "", errors.Wrap(err, "failed to create saml request")
 	}
-	return sp.IdPSettings.SSOServiceURL + fmt.Sprintf(`?RelayState=%s&SAMLRequest=%s`, url.QueryEscape(relayState), samlRequest), nil
+	return sp.IdPSSOServiceURL + fmt.Sprintf(`?RelayState=%s&SAMLRequest=%s`, url.QueryEscape(relayState), samlRequest), nil
 }
 
 // MetadataXML returns SAML 2.0 Service Provider metadata XML.
@@ -94,8 +98,8 @@ func (sp *ServiceProvider) validateResponse(res *Response) error {
 	// is left blank (or when not set to the correct ACS endpoint)
 	// in the OneLogin SAML configuration page. OneLogin returns
 	// Destination="{recipient}" in the SAML reponse in this case.
-	if res.Destination != sp.AcsURL {
-		return errors.Errorf("Wrong ACS destination, expected %q, got %q", sp.AcsURL, res.Destination)
+	if res.Destination != sp.ACSURL {
+		return errors.Errorf("Wrong ACS destination, expected %q, got %q", sp.ACSURL, res.Destination)
 	}
 
 	if res.Status.StatusCode.Value != "urn:oasis:names:tc:SAML:2.0:status:Success" {
@@ -210,8 +214,8 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 		err = errors.New(`missing Assertion > Subject`)
 	case assertion.Subject.SubjectConfirmation == nil:
 		err = errors.New(`missing Assertion > Subject > SubjectConfirmation`)
-	case assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL:
-		err = errors.Errorf("failed to validate assertion recipient: expected %q but got %q", sp.AcsURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
+	case assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != sp.ACSURL:
+		err = errors.Errorf("failed to validate assertion recipient: expected %q but got %q", sp.ACSURL, assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
 	}
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid assertion recipient")

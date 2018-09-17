@@ -98,7 +98,7 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 func authRequestHandler(w http.ResponseWriter, r *http.Request) {
 	successRedirectURL := r.FormValue("redirect_url")
 
-	switch serviceProvider.IdPSettings.SSOServiceBinding {
+	switch serviceProvider.IdPSSOServiceBinding {
 
 	case saml.HTTPRedirectBinding:
 		idpRedirectURL, err := serviceProvider.AuthnRequestURL(successRedirectURL)
@@ -127,13 +127,13 @@ func authRequestHandler(w http.ResponseWriter, r *http.Request) {
 	  </form>
 	</body>
 </html>
-	`, serviceProvider.IdPSettings.SSOServiceURL, successRedirectURL, samlRequest)
+	`, serviceProvider.IdPSSOServiceURL, successRedirectURL, samlRequest)
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(payload))
 
 	}
-	http.Error(w, errors.Errorf("invalid sso service binding: %v", serviceProvider.IdPSettings.SSOServiceBinding).Error(), 500)
+	http.Error(w, errors.Errorf("invalid sso service binding: %v", serviceProvider.IdPSSOServiceBinding).Error(), 500)
 	return
 }
 
@@ -173,7 +173,7 @@ func main() {
 		IdPMetadataURL: *flagMetadataURL,
 
 		MetadataURL: *flagPublicURL + metadataPath,
-		AcsURL:      *flagPublicURL + acsPath,
+		ACSURL:      *flagPublicURL + acsPath,
 
 		SecurityOpts: saml.SecurityOpts{
 			AllowSelfSignedCert: true,
@@ -196,13 +196,13 @@ func main() {
 	}
 	ssoService := idpMetadata.SSOService(binding)
 	if ssoService != nil {
-		serviceProvider.IdPSettings.SSOServiceBinding = ssoService.Binding
-		serviceProvider.IdPSettings.SSOServiceURL = ssoService.Location
+		serviceProvider.IdPSSOServiceBinding = ssoService.Binding
+		serviceProvider.IdPSSOServiceURL = ssoService.Location
 	}
 
 	idpCert := idpMetadata.Cert()
-	serviceProvider.IdPSettings.PubkeyPEM = idpCert
-	serviceProvider.IdPSettings.EntityID = idpMetadata.EntityID
+	serviceProvider.IdPPubkeyPEM = idpCert
+	serviceProvider.IdPEntityID = idpMetadata.EntityID
 
 	r := chi.NewRouter()
 	r.Use(logHandler)

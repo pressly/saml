@@ -96,11 +96,9 @@ zQUwDSgIrjoMPWcFNGu2pzSnQWWU7BB+DpX3jb7kHC/mLFj3M2Fxv7bCK51HWI6h
 3/+aZDnC9gbMWMgwWA==
 -----END CERTIFICATE-----`,
 
-	MetadataURL: "http://localhost:1235/saml/service.xml",
-	AcsURL:      "http://localhost:1235/saml/acs",
-	IdPSettings: IdPSettings{
-		SSOServiceURL: testIdP.SSOURL,
-	},
+	MetadataURL:      "http://localhost:1235/saml/service.xml",
+	ACSURL:           "http://localhost:1235/saml/acs",
+	IdPSSOServiceURL: testIdP.SSOURL,
 }
 
 func TestGenerateSPMetadata(t *testing.T) {

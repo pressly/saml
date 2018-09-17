@@ -152,7 +152,7 @@ func TestParseAuthenticationRequest(t *testing.T) {
 		Request:                 *authnRequest,
 		Address:                 "127.0.0.1",
 		ACSEndpoint: &IndexedEndpoint{
-			Location: testSP.AcsURL,
+			Location: testSP.ACSURL,
 		},
 	}
 

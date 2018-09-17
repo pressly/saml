@@ -17,35 +17,8 @@ import (
 
 // ServiceProvider represents a service provider.
 type ServiceProvider struct {
-	IdPMetadataURL string
-	IdPMetadataXML []byte
-	IdPMetadata    *Metadata
-
-	KeyFile  string
-	CertFile string
-
-	PrivkeyPEM string
-	PubkeyPEM  string
-
 	MetadataURL string
-	AcsURL      string
 
-	DTDFile string
-
-	AllowIdpInitiated bool
-
-	SecurityOpts
-
-	pemCert atomic.Value
-
-	// Service Provider Settings
-	Settings SPSettings
-
-	// Identity Provider settings the Service Provider instance should use
-	IdPSettings IdPSettings
-}
-
-type SPSettings struct {
 	// Identifier of the SP entity  (must be a URI)
 	EntityID string
 
@@ -57,17 +30,47 @@ type SPSettings struct {
 	// Supports only HTTP-POST binding
 	ACSBinding string
 
+	AllowIdpInitiated bool
+
+	SecurityOpts
+
 	// File system location of the private key file
 	KeyFile string
+
+	// File system location of the cert file
+	CertFile string
+
 	// Private key can also be provided as a param
 	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
 	PrivkeyPEM string
 
-	// File system location of the cert file
-	CertFile string
 	// Cert can also be provided as a param
 	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
 	PubkeyPEM string
+
+	DTDFile string
+
+	pemCert atomic.Value
+
+	// Identity Provider settings the Service Provider instance should use
+	IdPMetadataURL string
+	IdPMetadataXML []byte
+	IdPMetadata    *Metadata
+
+	// Identifier of the SP entity (must be a URI)
+	IdPEntityID string
+
+	// File system location of the cert file
+	IdPCertFile string
+	// Cert can also be provided as a param
+	// For now we need to write to a temp file since xmlsec requires a physical file to validate the document signature
+	IdPPubkeyPEM string
+
+	// SAML protocol binding to be used when sending the <AuthnRequest> message
+	IdPSSOServiceBinding string
+
+	// URL Target of the IdP where the SP will send the AuthnRequest message
+	IdPSSOServiceURL string
 }
 
 // PrivkeyFile returns a physical path where the SP's key can be accessed.
@@ -78,7 +81,7 @@ func (sp *ServiceProvider) PrivkeyFile() (string, error) {
 	if sp.PrivkeyPEM != "" {
 		return writeFile([]byte(sp.PrivkeyPEM))
 	}
-	return "", errors.New("No private key given.")
+	return "", errors.New("missing sp private key")
 }
 
 // PubkeyFile returns a physical path where the SP's public certificate can be
@@ -90,18 +93,17 @@ func (sp *ServiceProvider) PubkeyFile() (string, error) {
 	if sp.PubkeyPEM != "" {
 		return validateKeyFile(writeFile([]byte(sp.PubkeyPEM)))
 	}
-	return "", errors.New("No public key given.")
+	return "", errors.New("missing sp public key")
 }
 
 // GetIdPCertFile returns a physical path where the IdP certificate can be
 // accessed.
 func (sp *ServiceProvider) GetIdPCertFile() (string, error) {
-	cert := sp.IdPSettings.PubkeyPEM
-	if cert == "" {
+	if sp.IdPPubkeyPEM == "" {
 		return "", errors.New("missing idp certificate")
 	}
 
-	certBytes, _ := base64.StdEncoding.DecodeString(cert)
+	certBytes, _ := base64.StdEncoding.DecodeString(sp.IdPPubkeyPEM)
 
 	certBytes = pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
@@ -210,7 +212,7 @@ func (sp *ServiceProvider) Metadata() (*Metadata, error) {
 			},
 			AssertionConsumerService: []IndexedEndpoint{{
 				Binding:  HTTPPostBinding,
-				Location: sp.AcsURL,
+				Location: sp.ACSURL,
 				Index:    1,
 			}},
 		},
@@ -265,8 +267,8 @@ func (sp *ServiceProvider) NewPostSAMLRequest() (string, error) {
 // NewAuthnRequest creates a new AuthnRequest object for the given IdP URL.
 func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
 	req := AuthnRequest{
-		AssertionConsumerServiceURL: sp.AcsURL,
-		Destination:                 sp.IdPSettings.SSOServiceURL,
+		AssertionConsumerServiceURL: sp.ACSURL,
+		Destination:                 sp.IdPSSOServiceURL,
 		ID:                          NewID(),
 		IssueInstant:                Now(),
 		Version:                     "2.0",
