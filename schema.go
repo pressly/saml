@@ -68,7 +68,7 @@ type NameIDPolicy struct {
 
 // Response represents the SAML object of the same name.
 //
-// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf section 3.3.3
 type Response struct {
 	XMLName            xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol Response"`
 	Destination        string   `xml:",attr"`
@@ -81,6 +81,7 @@ type Response struct {
 	Status             *Status   `xml:"urn:oasis:names:tc:SAML:2.0:protocol Status"`
 	EncryptedAssertion *EncryptedAssertion
 	Assertion          *Assertion `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
+	XMLText            []byte     `xml:"-"`
 }
 
 // Status represents the SAML object of the same name.

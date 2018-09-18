@@ -64,8 +64,8 @@ commands like this:
 idp-server \
   -listen-addr 127.0.0.1:1117 \
   -public-url http://127.0.0.1:1117 \
-  -pubkey-cert-pem /path/to/idp.crt \
-  -privkey-pem /path/to/idp.key \
+  -pubkey-cert-pem ./idp.crt \
+  -privkey-pem ./idp.key \
   -sp-metadata-url http://127.0.0.1:1113/metadata.xml \
   -initiated-by idp
 ```
@@ -74,8 +74,8 @@ idp-server \
 sp-server \
   -listen-addr 127.0.0.1:1113 \
   -public-url http://127.0.0.1:1113 \
-  -pubkey-cert-pem /path/to/sp.crt \
-  -privkey-pem /path/to/sp.key \
+  -pubkey-cert-pem ./sp.crt \
+  -privkey-pem ./sp.key \
   -idp-metadata-url http://127.0.0.1:1117/metadata.xml \
   -initiated-by idp
 ```
@@ -100,8 +100,8 @@ commands like this:
 idp-server \
   -listen-addr 127.0.0.1:1117 \
   -public-url http://127.0.0.1:1117 \
-  -pubkey-cert-pem /path/to/idp.crt \
-  -privkey-pem /path/to/idp.key \
+  -pubkey-cert-pem ./idp.crt \
+  -privkey-pem ./idp.key \
   -sp-metadata-url http://127.0.0.1:1113/metadata.xml \
   -initiated-by sp
 ```
@@ -110,8 +110,8 @@ idp-server \
 sp-server \
   -listen-addr 127.0.0.1:1113 \
   -public-url http://127.0.0.1:1113 \
-  -pubkey-cert-pem /path/to/sp.crt \
-  -privkey-pem /path/to/sp.key \
+  -pubkey-cert-pem ./sp.crt \
+  -privkey-pem ./sp.key \
   -idp-metadata-url http://127.0.0.1:1117/metadata.xml \
   -initiated-by sp
 ```

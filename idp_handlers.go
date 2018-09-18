@@ -2,27 +2,25 @@ package saml
 
 import (
 	"bytes"
-	"compress/flate"
 	"encoding/base64"
 	"encoding/xml"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"text/template"
+
+	"github.com/pkg/errors"
 )
 
 // MetadataHandler generates and serves the IdP's metadata.xml file.
 func (idp *IdentityProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := idp.Metadata()
 	if err != nil {
-		log.Printf("Failed to generate metadata: %v", err)
-		writeErr(w, err)
+		writeErr(w, errors.Wrap(err, "failed to generate metadata"))
 		return
 	}
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	if err != nil {
-		log.Printf("Failed to build metadata: %v", err)
-		writeErr(w, err)
+		writeErr(w, errors.Wrap(err, "failed to build metadata"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf8")
@@ -34,8 +32,7 @@ func (idp *IdentityProvider) MetadataHandler(w http.ResponseWriter, r *http.Requ
 func (idp *IdentityProvider) NewLoginRequest(spMetadataURL string, authFn Authenticator) (*LoginRequest, error) {
 	metadata, err := GetMetadata(spMetadataURL)
 	if err != nil {
-		log.Printf("Failed to get metadata: %v", err)
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get metadata")
 	}
 	lr := &LoginRequest{
 		spMetadataURL: spMetadataURL,
@@ -46,98 +43,65 @@ func (idp *IdentityProvider) NewLoginRequest(spMetadataURL string, authFn Authen
 	return lr, nil
 }
 
-// ServeSSO creates and serves a SSO assertion based on a request.
-func (idp *IdentityProvider) ServeSSO(authFn Authenticator) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sess, err := authFn(w, r)
-		if err != nil {
-			log.Printf("authFn: %v", err)
-			return
-		}
-
-		values := r.URL.Query()
-
-		relayState := values.Get("RelayState")
-		samlRequest := values.Get("SAMLRequest")
-
-		data, err := base64.StdEncoding.DecodeString(samlRequest)
-		if err != nil {
-			log.Printf("Failed to decode SAMLRequest: %v", err)
-			writeErr(w, err)
-			return
-		}
-		buf, err := ioutil.ReadAll(flate.NewReader(bytes.NewBuffer(data)))
-		if err != nil {
-			log.Printf("Failed to read SAMLRequest: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		var authnRequest AuthnRequest
-		err = xml.Unmarshal(buf, &authnRequest)
-		if err != nil {
-			log.Printf("Failed to unmarshal SAMLRequest: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		idpAuthnRequest := &IdpAuthnRequest{
-			IDP:         idp,
-			HTTPRequest: r,
-			Request:     authnRequest,
-		}
-
-		err = idpAuthnRequest.MakeAssertion(sess)
-		if err != nil {
-			log.Printf("Failed to make assertion: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		err = idpAuthnRequest.MarshalAssertion()
-		if err != nil {
-			log.Printf("Failed to marshal assertion: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		err = idpAuthnRequest.MakeResponse()
-		if err != nil {
-			log.Printf("Failed to build response: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		buf, err = xml.MarshalIndent(idpAuthnRequest.Response, "", "\t")
-		if err != nil {
-			log.Printf("Failed to format response: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		form := redirectForm{
-			FormAction:   idpAuthnRequest.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient,
-			RelayState:   relayState, // RelayState is passed as is.
-			SAMLResponse: base64.StdEncoding.EncodeToString(buf),
-		}
-
-		formTpl, err := template.New("").Parse(redirectFormTemplate)
-		if err != nil {
-			log.Printf("Failed to create form: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		formBuf := bytes.NewBuffer(nil)
-		if err := formTpl.Execute(formBuf, form); err != nil {
-			log.Printf("Failed to build form: %v", err)
-			writeErr(w, err)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/html")
-		w.Write(formBuf.Bytes())
+func (idp *IdentityProvider) GenerateResponse(samlRequest, relayState string, sess *Session, address string) ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(samlRequest)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode saml request")
 	}
+	buf, err := ioutil.ReadAll(bytes.NewBuffer(data))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read saml request")
+	}
+
+	var authnRequest AuthnRequest
+	err = xml.Unmarshal(buf, &authnRequest)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal saml request")
+	}
+
+	idpAuthnRequest := &IdpAuthnRequest{
+		IDP:     idp,
+		Address: address,
+		Request: authnRequest,
+	}
+
+	err = idpAuthnRequest.MakeAssertion(sess)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to make assertion")
+	}
+
+	err = idpAuthnRequest.MarshalAssertion()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal assertion")
+	}
+
+	err = idpAuthnRequest.MakeResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to build response")
+	}
+
+	buf, err = xml.MarshalIndent(idpAuthnRequest.Response, "", "\t")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to format response")
+	}
+
+	form := redirectForm{
+		FormAction:   idpAuthnRequest.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient,
+		RelayState:   relayState, // RelayState is passed as is.
+		SAMLResponse: base64.StdEncoding.EncodeToString(buf),
+	}
+
+	formTpl, err := template.New("").Parse(redirectFormTemplate)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create form")
+	}
+
+	formBuf := bytes.NewBuffer(nil)
+	if err := formTpl.Execute(formBuf, form); err != nil {
+		return nil, errors.Wrap(err, "failed to build form")
+	}
+	return formBuf.Bytes(), nil
+
 }
 
 func writeErr(w http.ResponseWriter, err error) {

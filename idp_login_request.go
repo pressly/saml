@@ -56,7 +56,7 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 
 	idpAuthnRequest := &IdpAuthnRequest{
 		IDP:                     lr.idp,
-		HTTPRequest:             r,
+		Address:                 r.RemoteAddr,
 		Request:                 *authnRequest,
 		ServiceProviderMetadata: lr.metadata,
 	}

@@ -2,7 +2,6 @@ package saml
 
 import (
 	"encoding/xml"
-	"net/http"
 	"testing"
 	"time"
 
@@ -141,7 +140,7 @@ func TestGenerateIdPMetadata(t *testing.T) {
 func TestParseAuthenticationRequest(t *testing.T) {
 	tearUp()
 
-	authnRequest, err := testSP.NewAuthnRequest(testIdP.SSOURL)
+	authnRequest, err := testSP.NewAuthnRequest()
 	assert.NoError(t, err)
 
 	sdpMetadata, err := testSP.Metadata()
@@ -151,11 +150,9 @@ func TestParseAuthenticationRequest(t *testing.T) {
 		IDP:                     testIdP,
 		ServiceProviderMetadata: sdpMetadata,
 		Request:                 *authnRequest,
-		HTTPRequest: &http.Request{
-			RemoteAddr: "127.0.0.1",
-		},
+		Address:                 "127.0.0.1",
 		ACSEndpoint: &IndexedEndpoint{
-			Location: testSP.AcsURL,
+			Location: testSP.ACSURL,
 		},
 	}
 
