@@ -68,20 +68,59 @@ type NameIDPolicy struct {
 
 // Response represents the SAML object of the same name.
 //
-// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf section 3.3.3
+// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf section 3.2
 type Response struct {
-	XMLName            xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol Response"`
-	Destination        string   `xml:",attr"`
-	Signature          *xmlsec.Signature
-	ID                 string    `xml:",attr"`
-	InResponseTo       string    `xml:",attr"`
-	IssueInstant       time.Time `xml:",attr"`
-	Version            string    `xml:",attr"`
-	Issuer             *Issuer   `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
-	Status             *Status   `xml:"urn:oasis:names:tc:SAML:2.0:protocol Status"`
+	XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol Response"`
+
+	// Required attributes
+	//
+
+	// An identifier for the request.
+	// The values of the ID attribute in a request and the InResponseTo
+	// attribute in the corresponding response MUST match.
+	ID string `xml:",attr"`
+
+	// The version of this request.
+	// Only version 2.0 is supported by goware/saml
+	Version string `xml:",attr"`
+
+	// The time instant of issue of the request. The time value is encoded in UTC
+	IssueInstant time.Time `xml:",attr"`
+
+	// A code representing the status of the corresponding reques
+	Status *Status `xml:"urn:oasis:names:tc:SAML:2.0:protocol Status"`
+
+	// Optional attributes
+	//
+
+	// A URI reference indicating the address to which this request has been sent. This is useful to prevent
+	// malicious forwarding of requests to unintended recipients, a protection that is required by some
+	// protocol bindings. If it is present, the actual recipient MUST check that the URI reference identifies the
+	// location at which the message was received. If it does not, the request MUST be discarded. Some
+	// protocol bindings may require the use of this attribute
+	Destination string `xml:",attr"`
+
+	// An XML Signature that authenticates the requester and provides message integrity
+	Signature *xmlsec.Signature
+
+	// A reference to the identifier of the request to which the response corresponds, if any. If the response
+	// is not generated in response to a request, or if the ID attribute value of a request cannot be
+	// determined (for example, the request is malformed), then this attribute MUST NOT be present.
+	// Otherwise, it MUST be present and its value MUST match the value of the corresponding request's
+	// ID attribute.
+	InResponseTo string `xml:",attr"`
+
+	// Identifies the entity that generated the request message
+	// By default, the value of the <Issuer> element is a URI of no more than 1024 characters.
+	// Changes from SAML version 1 to 2
+	// An <Issuer> element can now be present on requests and responses (in addition to appearing on assertions).
+	Issuer *Issuer `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
+
 	EncryptedAssertion *EncryptedAssertion
-	Assertion          *Assertion `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
-	XMLText            []byte     `xml:"-"`
+
+	Assertion *Assertion `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
+
+	XMLText []byte `xml:"-"`
 }
 
 // Status represents the SAML object of the same name.

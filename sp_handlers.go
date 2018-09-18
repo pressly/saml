@@ -199,6 +199,7 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 	// Validate issuer
 	// Since assertion could be encrypted we need to wait before validating the issuer
 	// Only validate issuer if the entityID is set in the IdP metadata
+	// TODO: the spec lists the Issuer element of an Assertion as required, we shouldn't skip validation
 	switch {
 	case sp.IdPMetadata.EntityID == "":
 		// Skip issuer validation
