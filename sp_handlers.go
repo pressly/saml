@@ -201,12 +201,12 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 	// Only validate issuer if the entityID is set in the IdP metadata
 	// TODO: the spec lists the Issuer element of an Assertion as required, we shouldn't skip validation
 	switch {
-	case sp.IdPMetadata.EntityID == "":
-		// Skip issuer validation
+	case sp.IdPEntityID == "":
+		// Skip issuer validationgit s
 	case assertion.Issuer == nil:
 		return nil, errors.New(`missing Assertion > Issuer`)
-	case assertion.Issuer.Value != sp.IdPMetadata.EntityID:
-		return nil, errors.Errorf("failed to validate assertion issuer: expected %q but got %q", sp.IdPMetadata.EntityID, assertion.Issuer.Value)
+	case assertion.Issuer.Value != sp.IdPEntityID:
+		return nil, errors.Errorf("failed to validate assertion issuer: expected %q but got %q", sp.IdPEntityID, assertion.Issuer.Value)
 	}
 
 	// Validate recipient
