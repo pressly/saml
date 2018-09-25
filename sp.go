@@ -103,7 +103,10 @@ func (sp *ServiceProvider) GetIdPCertFile() (string, error) {
 		return "", errors.New("missing idp certificate")
 	}
 
-	certBytes, _ := base64.StdEncoding.DecodeString(sp.IdPPubkeyPEM)
+	certBytes, err := base64.StdEncoding.DecodeString(sp.IdPPubkeyPEM)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to base64 decode idp cert")
+	}
 
 	certBytes = pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",

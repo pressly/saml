@@ -78,6 +78,9 @@ type Response struct {
 	// An identifier for the request.
 	// The values of the ID attribute in a request and the InResponseTo
 	// attribute in the corresponding response MUST match.
+	//
+	//  it must start with a letter or underscore, and can only contain letters, digits, underscores, hyphens, and periods.
+	// http://www.datypic.com/sc/xsd/t-xsd_ID.html
 	ID string `xml:",attr"`
 
 	// The version of this request.
