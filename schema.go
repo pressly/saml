@@ -34,18 +34,59 @@ import (
 // AuthnRequest represents the SAML object of the same name, a request from a service provider
 // to authenticate a user.
 //
-// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf sec 3.4.1 Element <AuthnRequest>
 type AuthnRequest struct {
-	XMLName                     xml.Name          `xml:"urn:oasis:names:tc:SAML:2.0:protocol AuthnRequest"`
-	AssertionConsumerServiceURL string            `xml:",attr"`
-	Destination                 string            `xml:",attr"`
-	ID                          string            `xml:",attr"`
-	IssueInstant                time.Time         `xml:",attr"`
-	ProtocolBinding             string            `xml:",attr"`
-	Version                     string            `xml:",attr"`
-	Issuer                      Issuer            `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
-	Signature                   *xmlsec.Signature `xml:"http://www.w3.org/2000/09/xmldsig# Signature"`
-	NameIDPolicy                NameIDPolicy      `xml:"urn:oasis:names:tc:SAML:2.0:protocol NameIDPolicy"`
+	XMLName   xml.Name          `xml:"urn:oasis:names:tc:SAML:2.0:protocol AuthnRequest"`
+	Signature *xmlsec.Signature `xml:"http://www.w3.org/2000/09/xmldsig# Signature"`
+
+	// Required attributes
+	//
+
+	// An identifier for the request.
+	// The values of the ID attribute in a request and the InResponseTo
+	// attribute in the corresponding response MUST match.
+	ID string `xml:",attr"`
+
+	// The version of this request.
+	// Only version 2.0 is supported by goware/saml
+	Version string `xml:",attr"`
+
+	// The time instant of issue of the request. The time value is encoded in UTC
+	IssueInstant time.Time `xml:",attr"`
+
+	// Optional attributes
+	//
+
+	// Identifies the entity that generated the request message
+	// By default, the value of the <Issuer> element is a URI of no more than 1024 characters.
+	// Changes from SAML version 1 to 2
+	// An <Issuer> element can now be present on requests and responses (in addition to appearing on assertions).
+	Issuer Issuer
+
+	// A URI reference indicating the address to which this request has been sent. This is useful to prevent
+	// malicious forwarding of requests to unintended recipients, a protection that is required by some
+	// protocol bindings. If it is present, the actual recipient MUST check that the URI reference identifies the
+	// location at which the message was received. If it does not, the request MUST be discarded. Some
+	// protocol bindings may require the use of this attribute (see [SAMLBind]).
+	Destination string `xml:",attr"`
+
+	// Specifies by value the location to which the <Response> message MUST be returned to the
+	// requester. The responder MUST ensure by some means that the value specified is in fact associated
+	// with the requester. [SAMLMeta] provides one possible mechanism; signing the enclosing
+	// <AuthnRequest> message is another. This attribute is mutually exclusive with the
+	// AssertionConsumerServiceIndex attribute and is typically accompanied by the ProtocolBinding attribute.
+	AssertionConsumerServiceURL string `xml:",attr"`
+
+	// A URI reference that identifies a SAML protocol binding to be used when returning the <Response>
+	// message. See [SAMLBind] for more information about protocol bindings and URI references defined
+	// for them. This attribute is mutually exclusive with the AssertionConsumerServiceIndex attribute
+	// and is typically accompanied by the AssertionConsumerServiceURL attribute.
+	ProtocolBinding string `xml:",attr"`
+
+	// Specifies constraints on the name identifier to be used to represent the requested subject.
+	// If omitted, then any type of identifier supported by the identity provider for the requested
+	// subject can be used, constrained by any relevant deployment-specific policies, with respect to privacy.
+	NameIDPolicy NameIDPolicy
 }
 
 // Issuer represents the SAML object of the same name.
@@ -88,7 +129,7 @@ type Response struct {
 	IssueInstant time.Time `xml:",attr"`
 
 	// A code representing the status of the corresponding reques
-	Status *Status `xml:"urn:oasis:names:tc:SAML:2.0:protocol Status"`
+	Status *Status
 
 	// Optional attributes
 	//
@@ -114,13 +155,11 @@ type Response struct {
 	// By default, the value of the <Issuer> element is a URI of no more than 1024 characters.
 	// Changes from SAML version 1 to 2
 	// An <Issuer> element can now be present on requests and responses (in addition to appearing on assertions).
-	Issuer *Issuer `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
+	Issuer *Issuer
 
 	EncryptedAssertion *EncryptedAssertion
 
-	Assertion *Assertion `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
-
-	XMLText []byte `xml:"-"`
+	Assertion *Assertion
 }
 
 // Status represents the SAML object of the same name.
@@ -147,6 +186,7 @@ var StatusSuccess = "urn:oasis:names:tc:SAML:2.0:status:Success"
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
 type EncryptedAssertion struct {
+	XMLName       xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:assertion EncryptedAssertion"`
 	Assertion     *Assertion
 	EncryptedData []byte `xml:",innerxml"`
 }
@@ -159,7 +199,7 @@ type Assertion struct {
 	ID                 string    `xml:",attr"`
 	IssueInstant       time.Time `xml:",attr"`
 	Version            string    `xml:",attr"`
-	Issuer             *Issuer   `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
+	Issuer             *Issuer
 	Signature          *xmlsec.Signature
 	Subject            *Subject
 	Conditions         *Conditions
