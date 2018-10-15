@@ -93,7 +93,7 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		}
 
 		signingContext := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(cert))
-		signingContext.SetSignatureMethod(Crypto.SHA256)
+		signingContext.SetSignatureMethod(CryptoSHA256)
 
 		doc := etree.NewDocument()
 		err = doc.ReadFromBytes(authnRequest)

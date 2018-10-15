@@ -37,6 +37,7 @@ const (
 
 	// HTTPRedirectBinding is the official URN for the HTTP-Redirect binding (transport)
 	HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+)
 
 const (
 	ProtocolNamespace = "urn:oasis:names:tc:SAML:2.0:protocol"
