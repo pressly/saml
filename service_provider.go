@@ -366,35 +366,35 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		</div>
   </form>
 </body>
-</html>
-`, sp.IdPSSOServiceURL, relayState, base64.StdEncoding.EncodeToString(authnRequest))
+</html>`, sp.IdPSSOServiceURL, relayState, base64.StdEncoding.EncodeToString(authnRequest))
 
 	return payload, nil
 }
 
 // NewAuthnRequest creates a new AuthnRequest object for the given IdP URL.
 func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
-	// TODO: validate?
-
 	req := AuthnRequest{
 		AssertionConsumerServiceURL: sp.ACSURL,
 		Destination:                 sp.IdPSSOServiceURL,
 		ID:                          NewID(),
 		IssueInstant:                Now(),
 		Version:                     "2.0",
-		ProtocolBinding:             sp.IdPSSOServiceBinding,
+		ProtocolBinding:             HTTPPostBinding,
 		Issuer: Issuer{
-			Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:entity",
+			Format: NameIDEntityFormat,
 			Value:  sp.MetadataURL,
 		},
 		NameIDPolicy: NameIDPolicy{
 			AllowCreate: true,
-			// TODO(ross): figure out exactly policy we need
-			// urn:mace:shibboleth:1.0:nameIdentifier
-			// urn:oasis:names:tc:SAML:2.0:nameid-format:transient
-			Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+			Format:      NameIDEmailAddressFormat,
 		},
 	}
+
+	req.XMLNamespace = ProtocolNamespace
+	req.XMLName.Local = "samlp:AuthnRequest"
+
+	req.NameIDPolicy.XMLName.Local = "samlp:NameIDPolicy"
+
 	return &req, nil
 }
 

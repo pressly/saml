@@ -31,12 +31,29 @@ import (
 	"github.com/goware/saml/xmlsec"
 )
 
+// HTTPPostBinding is the official URN for the HTTP-POST binding (transport)
+const HTTPPostBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+
+// HTTPRedirectBinding is the official URN for the HTTP-Redirect binding (transport)
+const HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+
+const ProtocolNamespace = "urn:oasis:names:tc:SAML:2.0:protocol"
+
+const NameIDEntityFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity"
+
+const NameIDEmailAddressFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+
 // AuthnRequest represents the SAML object of the same name, a request from a service provider
 // to authenticate a user.
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf sec 3.4.1 Element <AuthnRequest>
 type AuthnRequest struct {
-	XMLName   xml.Name          `xml:"urn:oasis:names:tc:SAML:2.0:protocol AuthnRequest"`
+	// Since multiple namespaces can be used, don't hardcode in the element
+	XMLName xml.Name
+	// Spec lists that the xmlns also needs to be namespaced: https://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd
+	// TODO: create custom marshaler
+	XMLNamespace string `xml:"xmlns:samlp,attr,omitempty"`
+
 	Signature *xmlsec.Signature `xml:"http://www.w3.org/2000/09/xmldsig# Signature"`
 
 	// Required attributes
@@ -101,10 +118,26 @@ type Issuer struct {
 // NameIDPolicy represents the SAML object of the same name.
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+// Also refer to Azure docs for their IdP supported values: https://msdn.microsoft.com/en-us/library/azure/dn195589.aspx
 type NameIDPolicy struct {
-	XMLName     xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol NameIDPolicy"`
-	AllowCreate bool     `xml:",attr"`
-	Format      string   `xml:",chardata"`
+	XMLName xml.Name
+
+	// Optional attributes
+	//
+
+	// A Boolean value used to indicate whether the identity provider is allowed, in the course of fulfilling the
+	// request, to create a new identifier to represent the principal. Defaults to "false". When "false", the
+	// requester constrains the identity provider to only issue an assertion to it if an acceptable identifier for
+	// the principal has already been established. Note that this does not prevent the identity provider from
+	// creating such identifiers outside the context of this specific request (for example, in advance for a
+	// large number of principals)
+	AllowCreate bool `xml:",attr"`
+
+	// Specifies the URI reference corresponding to a name identifier format defined in this or another
+	// specification (see Section 8.3 for examples). The additional value of
+	// urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted is defined specifically for use
+	// within this attribute to indicate a request that the resulting identifier be encrypted
+	Format string `xml:",attr"`
 }
 
 // Response represents the SAML object of the same name.

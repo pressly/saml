@@ -35,12 +35,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// HTTPPostBinding is the official URN for the HTTP-POST binding (transport)
-const HTTPPostBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-
-// HTTPRedirectBinding is the official URN for the HTTP-Redirect binding (transport)
-const HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
-
 // EntitiesDescriptor represents the SAML object of the same name.
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf section 2.3.1
