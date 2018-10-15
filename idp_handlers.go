@@ -15,10 +15,12 @@ func (idp *IdentityProvider) MetadataHandler(w http.ResponseWriter, r *http.Requ
 	metadata, err := idp.Metadata()
 	if err != nil {
 		writeErr(w, errors.Wrap(err, "failed to generate metadata"))
+		return
 	}
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	if err != nil {
 		writeErr(w, errors.Wrap(err, "failed to build metadata"))
+		return
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf8")
 	w.Write([]byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"))
