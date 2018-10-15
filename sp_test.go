@@ -153,10 +153,10 @@ func TestMakeAuthenticationRequest(t *testing.T) {
 		t.Fatal(errors.Wrap(err, "failed to marshal indent AuthnRequest"))
 	}
 
-	expectedOutput := `<AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:protocol" ID="id-MOCKID" Version="2.0" IssueInstant="` + Now().Format(time.RFC3339Nano) + `" Destination="http://localhost:1233/saml/sso" AssertionConsumerServiceURL="http://localhost:1235/saml/acs" ProtocolBinding="">
+	expectedOutput := `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="id-MOCKID" Version="2.0" IssueInstant="` + Now().Format(time.RFC3339Nano) + `" Destination="http://localhost:1233/saml/sso" AssertionConsumerServiceURL="http://localhost:1235/saml/acs" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST">
 	<Issuer xmlns="urn:oasis:names:tc:SAML:2.0:assertion" Format="urn:oasis:names:tc:SAML:2.0:nameid-format:entity">http://localhost:1235/saml/service.xml</Issuer>
-	<NameIDPolicy xmlns="urn:oasis:names:tc:SAML:2.0:protocol" AllowCreate="true">urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDPolicy>
-</AuthnRequest>`
+	<samlp:NameIDPolicy AllowCreate="true" Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"></samlp:NameIDPolicy>
+</samlp:AuthnRequest>`
 
 	if string(out) != expectedOutput {
 		t.Log(diffmatchpatch.New().DiffPrettyText(diffmatchpatch.New().DiffMain(string(out), expectedOutput, true)))
