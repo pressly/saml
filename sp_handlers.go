@@ -16,7 +16,8 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
-// NewAuthnRequest creates a new AuthnRequest object for the given IdP URL.
+// SAMLRequest creates a new AuthnRequest object to be sent to the IdP
+// Depending on the selected binding a HTTP-POST form, or a HTTP-Redirect URL are returned
 func (sp *ServiceProvider) SAMLRequest(relayState string) (string, error) {
 	authnRequest, err := sp.NewAuthnRequest()
 	if err != nil {

@@ -119,8 +119,3 @@ func (lr *LoginRequest) PostForm(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(formBuf.Bytes())
 }
-
-func writeErr(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(err.Error()))
-}

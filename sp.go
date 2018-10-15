@@ -69,6 +69,7 @@ type ServiceProvider struct {
 	// URL Target of the IdP where the SP will send the AuthnRequest message
 	IdPSSOServiceURL string
 
+	// Whether to sign the SAML Request sent to the IdP to initiate the SSO workflow
 	IdPSignSAMLRequest bool
 }
 
@@ -239,9 +240,10 @@ func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
 		},
 	}
 
+	// Spec lists that the xmlns also needs to be namespaced: https://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd
+	// TODO: create custom marshaler
 	req.XMLNamespace = ProtocolNamespace
 	req.XMLName.Local = "samlp:AuthnRequest"
-
 	req.NameIDPolicy.XMLName.Local = "samlp:NameIDPolicy"
 
 	return &req, nil

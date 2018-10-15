@@ -14,15 +14,11 @@ import (
 func (idp *IdentityProvider) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := idp.Metadata()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(errors.Wrap(err, "failed to generate metadata").Error()))
-		return
+		writeErr(w, errors.Wrap(err, "failed to generate metadata"))
 	}
 	out, err := xml.MarshalIndent(metadata, "", "\t")
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(errors.Wrap(err, "failed to build metadata").Error()))
-		return
+		writeErr(w, errors.Wrap(err, "failed to build metadata"))
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf8")
 	w.Write([]byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"))
@@ -90,4 +86,9 @@ func (idp *IdentityProvider) GenerateResponse(samlRequest, relayState string, se
 	}
 	return formBuf.Bytes(), nil
 
+}
+
+func writeErr(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte(err.Error()))
 }

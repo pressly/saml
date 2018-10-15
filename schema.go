@@ -32,18 +32,18 @@ import (
 )
 
 const (
-// HTTPPostBinding is the official URN for the HTTP-POST binding (transport)
-HTTPPostBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	// HTTPPostBinding is the official URN for the HTTP-POST binding (transport)
+	HTTPPostBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
 
-// HTTPRedirectBinding is the official URN for the HTTP-Redirect binding (transport)
-HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	// HTTPRedirectBinding is the official URN for the HTTP-Redirect binding (transport)
+	HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
 
 const (
 	ProtocolNamespace = "urn:oasis:names:tc:SAML:2.0:protocol"
 
-NameIDEntityFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity"
+	NameIDEntityFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity"
 
-NameIDEmailAddressFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+	NameIDEmailAddressFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
 )
 
 const (
