@@ -31,17 +31,24 @@ import (
 	"github.com/goware/saml/xmlsec"
 )
 
+const (
 // HTTPPostBinding is the official URN for the HTTP-POST binding (transport)
-const HTTPPostBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+HTTPPostBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
 
 // HTTPRedirectBinding is the official URN for the HTTP-Redirect binding (transport)
-const HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+HTTPRedirectBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
 
-const ProtocolNamespace = "urn:oasis:names:tc:SAML:2.0:protocol"
+const (
+	ProtocolNamespace = "urn:oasis:names:tc:SAML:2.0:protocol"
 
-const NameIDEntityFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity"
+NameIDEntityFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity"
 
-const NameIDEmailAddressFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+NameIDEmailAddressFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+)
+
+const (
+	CryptoSHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
+)
 
 // AuthnRequest represents the SAML object of the same name, a request from a service provider
 // to authenticate a user.

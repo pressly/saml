@@ -41,15 +41,13 @@ func (sp *ServiceProvider) SAMLRequest(relayState string) (string, error) {
 	}
 }
 
-// AuthnRequestURL creates SAML 2.0 AuthnRequest redirect URL,
+// SAMLRequestURL builds a HTTP Redirect SAML Request URL
 // aka SP-initiated login (SP->IdP).
 // The data is passed in the ?SAMLRequest query parameter and
 // the value is base64 encoded and deflate-compressed <AuthnRequest>
 // XML element. The final redirect destination that will be invoked
 // on successful login is passed using ?RelayState query parameter.
 //
-// NewSAMLRequest creates SAML 2.0 AuthnRequest
-// The <AuthnRequest> XML element is deflate-compressed, base64 and URL encoded
 // TODO(diogo): HTTP-Redirect signed requests
 func (sp *ServiceProvider) SAMLRequestURL(authnRequest []byte, relayState string) (string, error) {
 	// Compress authnRequest
@@ -76,8 +74,7 @@ func (sp *ServiceProvider) SAMLRequestURL(authnRequest []byte, relayState string
 	return fmt.Sprintf(`%s?RelayState=%s&SAMLRequest=%s`, sp.IdPSSOServiceURL, relayStateEscaped, authnReqEscaped), nil
 }
 
-// NewSAMLRequest creates SAML 2.0 AuthnRequest
-// The <AuthnRequest> XML element is base64 encoded
+// SAMLRequestForm creates a HTML form with an embedded SAML Request
 func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState string) (string, error) {
 	if sp.IdPSignSAMLRequest {
 		pubkeyFile, err := sp.PubkeyFile()
@@ -95,8 +92,7 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		}
 
 		signingContext := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(cert))
-		// TODO: review
-		// signingContext.SetSignatureMethod(sp.SignAuthnRequestsAlgorithm)
+		signingContext.SetSignatureMethod(Crypto.SHA256)
 
 		doc := etree.NewDocument()
 		err = doc.ReadFromBytes(authnRequest)
@@ -104,7 +100,9 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 			return "", errors.Wrap(err, "failed to deserialize authn request into xml document")
 		}
 
-		// TODO: bounds check
+		if len(doc.Child) < 1 {
+			return "", errors.Errorf("expecting at least one child element for authn request")
+		}
 		// Review the signing flow
 		el := doc.Child[0].(*etree.Element)
 		sig, err := signingContext.ConstructSignature(el, true)
@@ -113,8 +111,7 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		}
 
 		elCopy := el.Copy()
-		// TODO: review how the final AuthnRequest is built
-		// Right now it is following the flow defined in the gosaml2 lib: https://github.com/russellhaering/gosaml2/blob/master/build_request.go#L17
+		// Following the flow defined in the gosaml2 lib: https://github.com/russellhaering/gosaml2/blob/master/build_request.go#L17
 		var children []etree.Token
 		children = append(children, elCopy.Child[1])     // issuer is always first
 		children = append(children, sig)                 // next is the signature
