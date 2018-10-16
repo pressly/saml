@@ -1,34 +1,144 @@
-// Package sp provides tools for buildin an SP such as serving metadata,
-// authenticating an assertion and building assertions for IdPs.
 package saml
 
 import (
+	"bytes"
+	"compress/flate"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"net/url"
 	"strings"
 
+	"github.com/beevik/etree"
 	"github.com/goware/saml/xmlsec"
 	"github.com/pkg/errors"
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
-// AuthnRequestURL creates SAML 2.0 AuthnRequest redirect URL,
+// SAMLRequest creates a new AuthnRequest object to be sent to the IdP
+// Depending on the selected binding a HTTP-POST form, or a HTTP-Redirect URL are returned
+func (sp *ServiceProvider) SAMLRequest(relayState string) (string, error) {
+	authnRequest, err := sp.NewAuthnRequest()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create auth request")
+	}
+
+	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to marshal auth request")
+	}
+
+	switch sp.IdPSSOServiceBinding {
+	case HTTPRedirectBinding:
+		return sp.SAMLRequestURL(buf, relayState)
+
+	case HTTPPostBinding:
+		return sp.SAMLRequestForm(buf, relayState)
+
+	default:
+		// default to HTTP-Redirect?
+		return "", errors.Errorf("invalid sso service binding")
+	}
+}
+
+// SAMLRequestURL builds a HTTP Redirect SAML Request URL
 // aka SP-initiated login (SP->IdP).
 // The data is passed in the ?SAMLRequest query parameter and
 // the value is base64 encoded and deflate-compressed <AuthnRequest>
 // XML element. The final redirect destination that will be invoked
 // on successful login is passed using ?RelayState query parameter.
-func (sp *ServiceProvider) AuthnRequestURL(relayState string) (string, error) {
-	if sp.IdPSSOServiceURL == "" {
-		return "", errors.Errorf("missing idp sso service url")
+//
+// TODO(diogo): HTTP-Redirect signed requests
+func (sp *ServiceProvider) SAMLRequestURL(authnRequest []byte, relayState string) (string, error) {
+	// Compress authnRequest
+	flateBuf := bytes.NewBuffer(nil)
+	flateWriter, err := flate.NewWriter(flateBuf, flate.DefaultCompression)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create flate writer")
+	}
+	if _, err = flateWriter.Write(authnRequest); err != nil {
+		return "", errors.Wrap(err, "failed to write to flate writer")
+	}
+	flateWriter.Close()
+	authnReqCompressedBytes := flateBuf.Bytes()
+
+	// Base64 encode authnRequest
+	authnReqBase64Encoded := base64.StdEncoding.EncodeToString(authnReqCompressedBytes)
+
+	// Escape authnRequest
+	authnReqEscaped := url.QueryEscape(authnReqBase64Encoded)
+
+	// Escape relay state
+	relayStateEscaped := url.QueryEscape(relayState)
+
+	return fmt.Sprintf(`%s?RelayState=%s&SAMLRequest=%s`, sp.IdPSSOServiceURL, relayStateEscaped, authnReqEscaped), nil
+}
+
+// SAMLRequestForm creates a HTML form with an embedded SAML Request
+func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState string) (string, error) {
+	if sp.IdPSignSAMLRequest {
+		pubkeyFile, err := sp.PubkeyFile()
+		if err != nil {
+			return "", errors.Wrap(err, "failed to read service provider public key")
+		}
+		privkeyFile, err := sp.PrivkeyFile()
+		if err != nil {
+			return "", errors.Wrap(err, "failed to read service provider private key")
+		}
+
+		cert, err := tls.LoadX509KeyPair(pubkeyFile, privkeyFile)
+		if err != nil {
+			return "", errors.Wrap(err, "failed to load service provider key pair")
+		}
+
+		signingContext := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(cert))
+		signingContext.SetSignatureMethod(CryptoSHA256)
+
+		doc := etree.NewDocument()
+		err = doc.ReadFromBytes(authnRequest)
+		if err != nil {
+			return "", errors.Wrap(err, "failed to deserialize authn request into xml document")
+		}
+
+		if len(doc.Child) < 1 {
+			return "", errors.Errorf("expecting at least one child element for authn request")
+		}
+		// Review the signing flow
+		el := doc.Child[0].(*etree.Element)
+		sig, err := signingContext.ConstructSignature(el, true)
+		if err != nil {
+			return "", errors.Wrap(err, "failed to build authn request signature")
+		}
+
+		elCopy := el.Copy()
+		// Following the flow defined in the gosaml2 lib: https://github.com/russellhaering/gosaml2/blob/master/build_request.go#L17
+		var children []etree.Token
+		children = append(children, elCopy.Child[1])     // issuer is always first
+		children = append(children, sig)                 // next is the signature
+		children = append(children, elCopy.Child[2:]...) // then all other children
+		elCopy.Child = children
+
+		doc = etree.NewDocument()
+		doc.SetRoot(elCopy)
+		if authnRequest, err = doc.WriteToBytes(); err != nil {
+			return "", errors.Wrap(err, "failed to write xml document to string")
+		}
 	}
 
-	samlRequest, err := sp.NewRedirectSAMLRequest()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create saml request")
-	}
-	return sp.IdPSSOServiceURL + fmt.Sprintf(`?RelayState=%s&SAMLRequest=%s`, url.QueryEscape(relayState), samlRequest), nil
+	payload := fmt.Sprintf(`
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<body onload="document.forms[0].submit()">
+	<form action="%s" method="post">
+		<div>
+			<input type="hidden" name="RelayState" value="%s" />
+			<input type="hidden" name="SAMLRequest" value="%s" />
+		</div>
+  </form>
+</body>
+</html>`, sp.IdPSSOServiceURL, relayState, base64.StdEncoding.EncodeToString(authnRequest))
+
+	return payload, nil
 }
 
 // MetadataXML returns SAML 2.0 Service Provider metadata XML.
@@ -71,55 +181,35 @@ func (sp *ServiceProvider) verifySignature(plaintextMessage []byte) error {
 		return errors.Wrap(err, "failed to verify xmlsec signature")
 	}
 	return nil
-
 }
 
-// ParseResponse reads a base64 XML encoded string and builds a SAML Response object
-func (sp *ServiceProvider) parseResponse(samlResponse string) (*Response, error) {
-	samlResponseXML, err := base64.StdEncoding.DecodeString(samlResponse)
+// AssertResponse parses and validates a SAML response and its assertion
+func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) {
+	// Parse SAML response from base64 encoded payload
+	//
+	samlResponseXML, err := base64.StdEncoding.DecodeString(base64Res)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to base64-decode SAML response")
 	}
-
-	var res Response
-	err = xml.Unmarshal(samlResponseXML, &res)
-	if err != nil {
+	var res *Response
+	if err := xml.Unmarshal(samlResponseXML, &res); err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal XML document: %s", string(samlResponseXML))
 	}
-	// Save XML raw bytes so later we can reuse it to verify the signature
-	res.XMLText = samlResponseXML
-	return &res, nil
-}
 
-// ValidateResponse
-func (sp *ServiceProvider) validateResponse(res *Response) error {
+	// Validate response
+	//
 	// Validate destination
 	// Note: OneLogin triggers this error when the Recipient field
 	// is left blank (or when not set to the correct ACS endpoint)
 	// in the OneLogin SAML configuration page. OneLogin returns
 	// Destination="{recipient}" in the SAML reponse in this case.
 	if res.Destination != sp.ACSURL {
-		return errors.Errorf("Wrong ACS destination, expected %q, got %q", sp.ACSURL, res.Destination)
+		return nil, errors.Errorf("Wrong ACS destination, expected %q, got %q", sp.ACSURL, res.Destination)
 	}
-
 	if res.Status.StatusCode.Value != "urn:oasis:names:tc:SAML:2.0:status:Success" {
-		return errors.Errorf("Unexpected status code: %v", res.Status.StatusCode.Value)
-	}
-	return nil
-}
-
-// AssertResponse parses and validates a SAML response and its assertion
-func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) {
-	// Parse SAML response from base64 encoded payload
-	res, err := sp.parseResponse(base64Res)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse response")
+		return nil, errors.Errorf("Unexpected status code: %v", res.Status.StatusCode.Value)
 	}
 
-	// Validate response
-	if err = sp.validateResponse(res); err != nil {
-		return nil, errors.Wrapf(err, "failed to validate response: %+v", string(res.XMLText))
-	}
 	// Validates if the assertion matches the ID set in the original SAML AuthnRequest
 	//
 	// This check should be performed first before validating the signature since it is a cheap way to discard invalid messages
@@ -140,6 +230,9 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 	// 	return nil, errors.New("Unexpected assertion InResponseTo value")
 	// }
 
+	// Save XML raw bytes so later we can reuse it to verify the signature
+	plainText := samlResponseXML
+
 	// Validate response reference
 	// Before validating the signature with xmlsec, first check if the reference ID is correct
 	//
@@ -148,15 +241,14 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 		if err := verifySignatureReference(res.Signature, res.ID); err != nil {
 			return nil, errors.Wrap(err, "failed to validate response signature reference")
 		}
-		if err := sp.verifySignature(res.XMLText); err != nil {
-			return nil, errors.Wrapf(err, "failed to verify message signature: %v", string(res.XMLText))
+		if err := sp.verifySignature(plainText); err != nil {
+			return nil, errors.Wrapf(err, "failed to verify message signature: %v", string(plainText))
 		}
 	}
 
 	// Check for encrypted assertions
 	// http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf section 2.3.4
 	assertion := res.Assertion
-	plainText := res.XMLText
 	if res.EncryptedAssertion != nil {
 		keyFile, err := sp.PrivkeyFile()
 		if err != nil {

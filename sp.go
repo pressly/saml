@@ -1,14 +1,11 @@
 package saml
 
 import (
-	"bytes"
-	"compress/flate"
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"sync/atomic"
 
@@ -71,6 +68,9 @@ type ServiceProvider struct {
 
 	// URL Target of the IdP where the SP will send the AuthnRequest message
 	IdPSSOServiceURL string
+
+	// Whether to sign the SAML Request sent to the IdP to initiate the SSO workflow
+	IdPSignSAMLRequest bool
 }
 
 // PrivkeyFile returns a physical path where the SP's key can be accessed.
@@ -221,49 +221,6 @@ func (sp *ServiceProvider) Metadata() (*Metadata, error) {
 	return metadata, nil
 }
 
-// NewSAMLRequest creates SAML 2.0 AuthnRequest
-// The <AuthnRequest> XML element is deflate-compressed, base64 and URL encoded
-func (sp *ServiceProvider) NewRedirectSAMLRequest() (string, error) {
-	authnRequest, err := sp.NewAuthnRequest()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create auth request")
-	}
-
-	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal auth request")
-	}
-
-	flateBuf := bytes.NewBuffer(nil)
-	flateWriter, err := flate.NewWriter(flateBuf, flate.DefaultCompression)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create flate writer")
-	}
-
-	_, err = flateWriter.Write(buf)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to write to flate writer")
-	}
-	flateWriter.Close()
-	return url.QueryEscape(base64.StdEncoding.EncodeToString(flateBuf.Bytes())), nil
-}
-
-// NewSAMLRequest creates SAML 2.0 AuthnRequest
-// The <AuthnRequest> XML element is base64 encoded
-func (sp *ServiceProvider) NewPostSAMLRequest() (string, error) {
-	authnRequest, err := sp.NewAuthnRequest()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create auth request")
-	}
-
-	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal auth request")
-	}
-
-	return base64.StdEncoding.EncodeToString(buf), nil
-}
-
 // NewAuthnRequest creates a new AuthnRequest object for the given IdP URL.
 func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
 	req := AuthnRequest{
@@ -272,17 +229,22 @@ func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
 		ID:                          NewID(),
 		IssueInstant:                Now(),
 		Version:                     "2.0",
+		ProtocolBinding:             HTTPPostBinding,
 		Issuer: Issuer{
-			Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:entity",
+			Format: NameIDEntityFormat,
 			Value:  sp.MetadataURL,
 		},
 		NameIDPolicy: NameIDPolicy{
 			AllowCreate: true,
-			// TODO(ross): figure out exactly policy we need
-			// urn:mace:shibboleth:1.0:nameIdentifier
-			// urn:oasis:names:tc:SAML:2.0:nameid-format:transient
-			Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+			Format:      NameIDEmailAddressFormat,
 		},
 	}
+
+	// Spec lists that the xmlns also needs to be namespaced: https://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd
+	// TODO: create custom marshaler
+	req.XMLNamespace = ProtocolNamespace
+	req.XMLName.Local = "samlp:AuthnRequest"
+	req.NameIDPolicy.XMLName.Local = "samlp:NameIDPolicy"
+
 	return &req, nil
 }

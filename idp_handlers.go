@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/xml"
-	"io/ioutil"
 	"net/http"
 	"text/template"
 
@@ -44,18 +43,8 @@ func (idp *IdentityProvider) NewLoginRequest(spMetadataURL string, authFn Authen
 }
 
 func (idp *IdentityProvider) GenerateResponse(samlRequest, relayState string, sess *Session, address string) ([]byte, error) {
-	data, err := base64.StdEncoding.DecodeString(samlRequest)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode saml request")
-	}
-	buf, err := ioutil.ReadAll(bytes.NewBuffer(data))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read saml request")
-	}
-
 	var authnRequest AuthnRequest
-	err = xml.Unmarshal(buf, &authnRequest)
-	if err != nil {
+	if err := xml.Unmarshal([]byte(samlRequest), &authnRequest); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal saml request")
 	}
 
@@ -65,22 +54,19 @@ func (idp *IdentityProvider) GenerateResponse(samlRequest, relayState string, se
 		Request: authnRequest,
 	}
 
-	err = idpAuthnRequest.MakeAssertion(sess)
-	if err != nil {
+	if err := idpAuthnRequest.MakeAssertion(sess); err != nil {
 		return nil, errors.Wrap(err, "failed to make assertion")
 	}
 
-	err = idpAuthnRequest.MarshalAssertion()
-	if err != nil {
+	if err := idpAuthnRequest.MarshalAssertion(); err != nil {
 		return nil, errors.Wrap(err, "failed to marshal assertion")
 	}
 
-	err = idpAuthnRequest.MakeResponse()
-	if err != nil {
+	if err := idpAuthnRequest.MakeResponse(); err != nil {
 		return nil, errors.Wrap(err, "failed to build response")
 	}
 
-	buf, err = xml.MarshalIndent(idpAuthnRequest.Response, "", "\t")
+	buf, err := xml.MarshalIndent(idpAuthnRequest.Response, "", "\t")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to format response")
 	}
