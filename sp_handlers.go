@@ -233,7 +233,8 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 	// Save XML raw bytes so later we can reuse it to verify the signature
 	plainText := samlResponseXML
 
-	var validSignature bool
+	// All SAML Responses are required to have a signature
+	validSignature := false
 	// Validate response reference
 	// Before validating the signature with xmlsec, first check if the reference ID is correct
 	//
