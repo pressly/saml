@@ -233,6 +233,8 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 	// Save XML raw bytes so later we can reuse it to verify the signature
 	plainText := samlResponseXML
 
+	// All SAML Responses are required to have a signature
+	validSignature := false
 	// Validate response reference
 	// Before validating the signature with xmlsec, first check if the reference ID is correct
 	//
@@ -244,6 +246,7 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 		if err := sp.verifySignature(plainText); err != nil {
 			return nil, errors.Wrapf(err, "failed to verify message signature: %v", string(plainText))
 		}
+		validSignature = true
 	}
 
 	// Check for encrypted assertions
@@ -286,6 +289,11 @@ func (sp *ServiceProvider) AssertResponse(base64Res string) (*Assertion, error) 
 		if err := sp.verifySignature(plainText); err != nil {
 			return nil, errors.Wrapf(err, "failed to verify message signature: %v", string(plainText))
 		}
+		validSignature = true
+	}
+
+	if !validSignature {
+		return nil, errors.Errorf("missing assertion signature")
 	}
 
 	// Validate issuer
