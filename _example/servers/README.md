@@ -41,13 +41,13 @@ only for testing.
 Once you have both keypairs install the `idp-server` tool:
 
 ```
-go install github.com/goware/saml/_example/servers/idp-server
+go install github.com/pressly/saml/_example/servers/idp-server
 ```
 
 and the `sp-server` tool:
 
 ```
-go install github.com/goware/saml/_example/servers/sp-server
+go install github.com/pressly/saml/_example/servers/sp-server
 ```
 
 ## Testing IdP-initiated SSO

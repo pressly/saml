@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/goware/saml/xmlsec"
+	"github.com/pressly/saml/xmlsec"
 	"github.com/pkg/errors"
 	dsig "github.com/russellhaering/goxmldsig"
 )

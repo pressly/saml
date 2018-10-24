@@ -9,7 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/goware/saml"
+	"github.com/pressly/saml"
 	"github.com/pkg/errors"
 )
 

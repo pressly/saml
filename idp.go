@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/goware/saml/xmlsec"
+	"github.com/pressly/saml/xmlsec"
 	"github.com/pkg/errors"
 )
 
