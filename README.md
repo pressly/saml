@@ -1,9 +1,9 @@
 # saml
 
-[![Build Status](https://travis-ci.org/pressly/saml.svg?branch=master)](https://travis-ci.org/goware/saml)
+[![Build Status](https://travis-ci.org/pressly/saml.svg?branch=master)](https://travis-ci.org/pressly/saml)
 ![cover.run go](https://img.shields.io/badge/cover.run-33.4%25-red.svg?style=flat-square)
-[![Go Report Card](https://goreportcard.com/badge/github.com/pressly/saml)](https://goreportcard.com/report/github.com/goware/saml)
-[![GoDoc](https://godoc.org/github.com/pressly/saml?status.svg)](http://godoc.org/github.com/goware/saml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pressly/saml)](https://goreportcard.com/report/github.com/pressly/saml)
+[![GoDoc](https://godoc.org/github.com/pressly/saml?status.svg)](http://godoc.org/github.com/pressly/saml)
 
 Package `saml` provides tools and middleware for implementing [SAML based single
 sign-on](https://auth0.com/blog/how-saml-authentication-works/).
