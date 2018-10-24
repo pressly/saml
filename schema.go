@@ -28,7 +28,7 @@ import (
 	"encoding/xml"
 	"time"
 
-	"github.com/goware/saml/xmlsec"
+	"github.com/pressly/saml/xmlsec"
 )
 
 const (
@@ -73,7 +73,7 @@ type AuthnRequest struct {
 	ID string `xml:",attr"`
 
 	// The version of this request.
-	// Only version 2.0 is supported by goware/saml
+	// Only version 2.0 is supported by pressly/saml
 	Version string `xml:",attr"`
 
 	// The time instant of issue of the request. The time value is encoded in UTC
@@ -163,7 +163,7 @@ type Response struct {
 	ID string `xml:",attr"`
 
 	// The version of this request.
-	// Only version 2.0 is supported by goware/saml
+	// Only version 2.0 is supported by pressly/saml
 	Version string `xml:",attr"`
 
 	// The time instant of issue of the request. The time value is encoded in UTC

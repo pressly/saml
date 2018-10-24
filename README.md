@@ -1,9 +1,9 @@
 # saml
 
-[![Build Status](https://travis-ci.org/goware/saml.svg?branch=master)](https://travis-ci.org/goware/saml)
+[![Build Status](https://travis-ci.org/pressly/saml.svg?branch=master)](https://travis-ci.org/goware/saml)
 ![cover.run go](https://img.shields.io/badge/cover.run-33.4%25-red.svg?style=flat-square)
-[![Go Report Card](https://goreportcard.com/badge/github.com/goware/saml)](https://goreportcard.com/report/github.com/goware/saml)
-[![GoDoc](https://godoc.org/github.com/goware/saml?status.svg)](http://godoc.org/github.com/goware/saml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pressly/saml)](https://goreportcard.com/report/github.com/goware/saml)
+[![GoDoc](https://godoc.org/github.com/pressly/saml?status.svg)](http://godoc.org/github.com/goware/saml)
 
 Package `saml` provides tools and middleware for implementing [SAML based single
 sign-on](https://auth0.com/blog/how-saml-authentication-works/).
@@ -12,7 +12,7 @@ Currently, the `saml` package depends on the
 [xmlsec1](https://www.aleksey.com/xmlsec/index.html) command.
 
 See
-[_example/servers](https://github.com/goware/saml/tree/master/_example/servers)
+[_example/servers](https://github.com/pressly/saml/tree/master/_example/servers)
 for example implementations of IdP and SP servers.
 
 ## SAML SSO basics

@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/goware/saml"
+	"github.com/pressly/saml"
 	"github.com/pkg/errors"
 	"github.com/pressly/chi"
 

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-	"github.com/goware/saml/xmlsec"
+	"github.com/pressly/saml/xmlsec"
 	"github.com/pkg/errors"
 )
 
