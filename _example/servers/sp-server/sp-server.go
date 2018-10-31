@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/pressly/saml"
 	"github.com/pkg/errors"
+	"github.com/pressly/saml"
 )
 
 var (
@@ -98,40 +97,19 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 func authRequestHandler(w http.ResponseWriter, r *http.Request) {
 	successRedirectURL := r.FormValue("redirect_url")
 
-	switch serviceProvider.IdPSSOServiceBinding {
+	samlRequest, err := serviceProvider.SAMLRequest(successRedirectURL)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+	}
 
+	switch serviceProvider.IdPSSOServiceBinding {
 	case saml.HTTPRedirectBinding:
-		idpRedirectURL, err := serviceProvider.AuthnRequestURL(successRedirectURL)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-		}
-		log.Printf("Redirecting to IdP with SAMLRequest: %+v", idpRedirectURL)
-		w.Header().Add("Location", idpRedirectURL)
+		w.Header().Add("Location", samlRequest)
 		w.WriteHeader(http.StatusFound)
 
 	case saml.HTTPPostBinding:
-		samlRequest, err := serviceProvider.NewPostSAMLRequest()
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-
-		payload := fmt.Sprintf(`
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
-	<body onload="document.forms[0].submit()">
-		<form action="%s" method="post">
-			<div>
-				<input type="hidden" name="RelayState" value="%s" />
-				<input type="hidden" name="SAMLRequest" value="%s" />
-			</div>
-	  </form>
-	</body>
-</html>
-	`, serviceProvider.IdPSSOServiceURL, successRedirectURL, samlRequest)
-
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(payload))
-
+		w.Write([]byte(samlRequest))
 	}
 	http.Error(w, errors.Errorf("invalid sso service binding: %v", serviceProvider.IdPSSOServiceBinding).Error(), 500)
 	return
