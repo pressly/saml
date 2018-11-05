@@ -53,7 +53,8 @@ const (
 )
 
 const (
-	RFC3339NanoModified = "2006-01-02T15:04:05.9999999Z07:00"
+	// Modified RFC3339Nano format with only 7 digits for milliseconds instead of 9 to be compatible with the Azure IdP
+	SAMLTimeFormat = "2006-01-02T15:04:05.9999999Z07:00"
 )
 
 // AuthnRequest represents the SAML object of the same name, a request from a service provider
@@ -82,7 +83,7 @@ type AuthnRequest struct {
 	Version string `xml:",attr"`
 
 	// The time instant of issue of the request. The time value is encoded in UTC
-	IssueInstant CustomTime `xml:",attr"`
+	IssueInstant SAMLTime `xml:",attr"`
 
 	// Optional attributes
 	//
@@ -376,40 +377,40 @@ type AttributeValue struct {
 // Since the RFC3339Nano formats the date with 9 digits for milliseconds, the Azure IdP returns an error since only up to 7 digits are allowed.
 // NOTE: the docs list that ActiveDirectory expects the field, however, doesn't evaluate it (https://docs.microsoft.com/en-us/previous-versions/azure/dn195589(v=azure.100))
 //
-// To ensure the date conforms with the Azure IdP, a new CustomTime is implemented with a marshaller capping the number if milliseconds up to 7
-func NewCustomTime(t time.Time) CustomTime {
-	return CustomTime{parsed: &t}
+// To ensure the date conforms with the Azure IdP, a new SAMLTime is implemented with a marshaller capping the number if milliseconds up to 7
+func NewSAMLTime(t time.Time) SAMLTime {
+	return SAMLTime{parsed: &t}
 }
 
-type CustomTime struct {
+type SAMLTime struct {
 	raw    string
 	attr   xml.Attr
 	parsed *time.Time
 }
 
-func (customTime CustomTime) Time() time.Time {
-	return *customTime.parsed
+func (samlTime SAMLTime) Time() time.Time {
+	return *samlTime.parsed
 }
 
-func (customTime CustomTime) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
-	customTime.attr.Name = name
-	if customTime.parsed == nil {
-		return customTime.attr, nil
+func (samlTime SAMLTime) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	samlTime.attr.Name = name
+	if samlTime.parsed == nil {
+		return samlTime.attr, nil
 	}
-	customTime.attr.Value = customTime.parsed.Format(RFC3339NanoModified)
-	return customTime.attr, nil
+	samlTime.attr.Value = samlTime.parsed.Format(SAMLTimeFormat)
+	return samlTime.attr, nil
 }
 
-func (customTime CustomTime) UnmarshalXMLAttr(attr xml.Attr) error {
-	customTime.attr = attr
+func (samlTime SAMLTime) UnmarshalXMLAttr(attr xml.Attr) error {
+	samlTime.attr = attr
 	if attr.Value == "" {
 		return nil
 	}
-	customTime.raw = attr.Value
-	parsed, err := time.Parse(time.RFC3339Nano, attr.Value)
+	samlTime.raw = attr.Value
+	parsed, err := time.Parse(SAMLTimeFormat, attr.Value)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse time")
 	}
-	customTime.parsed = &parsed
+	samlTime.parsed = &parsed
 	return nil
 }
