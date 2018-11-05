@@ -227,7 +227,7 @@ func (sp *ServiceProvider) NewAuthnRequest() (*AuthnRequest, error) {
 		AssertionConsumerServiceURL: sp.ACSURL,
 		Destination:                 sp.IdPSSOServiceURL,
 		ID:                          NewID(),
-		IssueInstant:                Now(),
+		IssueInstant:                NewCustomTime(Now()),
 		Version:                     "2.0",
 		ProtocolBinding:             HTTPPostBinding,
 		Issuer: Issuer{

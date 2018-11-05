@@ -28,6 +28,7 @@ import (
 	"encoding/xml"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/pressly/saml/xmlsec"
 )
 
@@ -77,7 +78,7 @@ type AuthnRequest struct {
 	Version string `xml:",attr"`
 
 	// The time instant of issue of the request. The time value is encoded in UTC
-	IssueInstant time.Time `xml:",attr"`
+	IssueInstant CustomTime `xml:",attr"`
 
 	// Optional attributes
 	//
@@ -363,4 +364,48 @@ type AttributeValue struct {
 	Type   string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
 	Value  string `xml:",chardata"`
 	NameID *NameID
+}
+
+// The JSON and XML marshallers use the RFC3339Nano by default, which states that the milliseconds
+// part of the date can have up to 9 digits: 2006-01-02T15:04:05.999999999Z07:00
+// The Azure IdP expects the AuthnRequest IssueInstant to confirm with the RoundTrip "O" ISO 8601 format (https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings#Roundtrip)
+// Since the RFC3339Nano formats the date with 9 digits for milliseconds, the Azure IdP returns an error since only up to 7 digits are allowed.
+// NOTE: the docs list that ActiveDirectory expects the field, however, doesn't evaluate it (https://docs.microsoft.com/en-us/previous-versions/azure/dn195589(v=azure.100))
+//
+// To ensure the date conforms with the Azure IdP, a new CustomTime is implemented with a marshaller capping the number if milliseconds up to 7
+func NewCustomTime(t time.Time) CustomTime {
+	return CustomTime{parsed: &t}
+}
+
+type CustomTime struct {
+	raw    string
+	attr   xml.Attr
+	parsed *time.Time
+}
+
+func (customTime CustomTime) Time() time.Time {
+	return *customTime.parsed
+}
+
+func (customTime CustomTime) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	customTime.attr.Name = name
+	if customTime.parsed == nil {
+		return customTime.attr, nil
+	}
+	customTime.attr.Value = customTime.parsed.Format("2006-01-02T15:04:05.9999999Z07:00")
+	return customTime.attr, nil
+}
+
+func (customTime CustomTime) UnmarshalXMLAttr(attr xml.Attr) error {
+	customTime.attr = attr
+	if attr.Value == "" {
+		return nil
+	}
+	customTime.raw = attr.Value
+	parsed, err := time.Parse(time.RFC3339Nano, attr.Value)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse time")
+	}
+	customTime.parsed = &parsed
+	return nil
 }

@@ -5,9 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sergi/go-diff/diffmatchpatch"
-
 	"github.com/pkg/errors"
+	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -147,7 +146,6 @@ func TestMakeAuthenticationRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(errors.Wrap(err, "failed to create new AuthnRequest"))
 	}
-
 	out, err := xml.MarshalIndent(req, "", "\t")
 	if err != nil {
 		t.Fatal(errors.Wrap(err, "failed to marshal indent AuthnRequest"))
