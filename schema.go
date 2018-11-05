@@ -52,6 +52,10 @@ const (
 	CryptoSHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
 )
 
+const (
+	RFC3339NanoModified = "2006-01-02T15:04:05.9999999Z07:00"
+)
+
 // AuthnRequest represents the SAML object of the same name, a request from a service provider
 // to authenticate a user.
 //
@@ -392,7 +396,7 @@ func (customTime CustomTime) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	if customTime.parsed == nil {
 		return customTime.attr, nil
 	}
-	customTime.attr.Value = customTime.parsed.Format("2006-01-02T15:04:05.9999999Z07:00")
+	customTime.attr.Value = customTime.parsed.Format(RFC3339NanoModified)
 	return customTime.attr, nil
 }
 
