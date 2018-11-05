@@ -92,3 +92,49 @@ func TestSAMLResponse(t *testing.T) {
 		}
 	}
 }
+
+func TestSAMLRequestIssueInstant(t *testing.T) {
+	tests := []struct {
+		Name          string
+		AuthnReqXML   string
+		ExpectedError bool
+		Reason        string
+	}{
+		{
+			Name:          "Test invalid IssueInstant",
+			AuthnReqXML:   `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" IssueInstant="2018-11-02T18:04:32.00000000000000009Z"></samlp:AuthnRequest>`,
+			ExpectedError: true,
+			Reason:        "Invalid milliseconds, only allowed resolution up to 9 digits.",
+		},
+		{
+			Name:        "Test IssueInstant expected by Azure - 7 digits for milliseconds",
+			AuthnReqXML: `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" IssueInstant="2009-06-15T13:45:30.0000007Z"></samlp:AuthnRequest>`,
+		},
+		{
+			Name:        "Test valid IssueInstant",
+			AuthnReqXML: `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" IssueInstant="2009-06-15T13:45:30.1234Z"></samlp:AuthnRequest>`,
+		},
+	}
+
+	for _, tt := range tests {
+		var req AuthnRequest
+		err := xml.Unmarshal([]byte(tt.AuthnReqXML), &req)
+		if !tt.ExpectedError && err != nil {
+			t.Fatalf("%v: %+v", tt.Name, err)
+		} else if tt.ExpectedError && err == nil {
+			t.Fatalf("%v: expected test to fail: reason: %q", tt.Name, tt.Reason)
+		}
+
+		if tt.ExpectedError {
+			continue
+		}
+
+		buf, err := xml.MarshalIndent(req, "", "\t")
+		if err != nil {
+			t.Fatal(errors.Wrapf(err, "%v: failed to marshal authn request", tt.Name))
+		}
+		if err := xml.Unmarshal(buf, &req); err != nil {
+			t.Fatal(errors.Wrapf(err, "%v: failed to unmarshal authn request buffer", tt.Name))
+		}
+	}
+}
