@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/pressly/saml/xmlsec"
 	"github.com/pkg/errors"
+	"github.com/pressly/saml/xmlsec"
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
@@ -24,7 +24,7 @@ func (sp *ServiceProvider) SAMLRequest(relayState string) (string, error) {
 		return "", errors.Wrap(err, "failed to create auth request")
 	}
 
-	buf, err := xml.MarshalIndent(authnRequest, "", "\t")
+	buf, err := xml.Marshal(authnRequest)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to marshal auth request")
 	}
@@ -93,8 +93,18 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		}
 
 		signingContext := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(cert))
+		// CA API Gateway IdP requires the exclusive canonicalization algorithm
+		//
+		// From the spec: http: //docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+		// 5.4.3 Canonicalization Method
+		// SAML implementations SHOULD use Exclusive Canonicalization [Excl-C14N], with or without comments,
+		// both in the <ds:CanonicalizationMethod> element of <ds:SignedInfo>, and as a
+		// <ds:Transform> algorithm. Use of Exclusive Canonicalization ensures that signatures created over
+		// SAML messages embedded in an XML context can be verified independent of that context.
+		signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
 		signingContext.SetSignatureMethod(CryptoSHA256)
 
+		// Build an etree document from the AuthnRequest XML
 		doc := etree.NewDocument()
 		err = doc.ReadFromBytes(authnRequest)
 		if err != nil {
@@ -104,23 +114,26 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		if len(doc.Child) < 1 {
 			return "", errors.Errorf("expecting at least one child element for authn request")
 		}
-		// Review the signing flow
-		el := doc.Child[0].(*etree.Element)
-		sig, err := signingContext.ConstructSignature(el, true)
+
+		// Signature requires an element, not document
+		element := doc.Child[0].(*etree.Element)
+		sig, err := signingContext.ConstructSignature(element, true)
 		if err != nil {
 			return "", errors.Wrap(err, "failed to build authn request signature")
 		}
 
-		elCopy := el.Copy()
+		// Build a new element with the signature included
+		elementWithSig := element.Copy()
 		// Following the flow defined in the gosaml2 lib: https://github.com/russellhaering/gosaml2/blob/master/build_request.go#L17
 		var children []etree.Token
-		children = append(children, elCopy.Child[1])     // issuer is always first
-		children = append(children, sig)                 // next is the signature
-		children = append(children, elCopy.Child[2:]...) // then all other children
-		elCopy.Child = children
+		children = append(children, elementWithSig.Child[0])     // issuer is always first
+		children = append(children, sig)                         // next is the signature
+		children = append(children, elementWithSig.Child[1:]...) // then all other children
+		elementWithSig.Child = children
 
+		// Convert the signed element to a document before marhsalling
 		doc = etree.NewDocument()
-		doc.SetRoot(elCopy)
+		doc.SetRoot(elementWithSig)
 		if authnRequest, err = doc.WriteToBytes(); err != nil {
 			return "", errors.Wrap(err, "failed to write xml document to string")
 		}
