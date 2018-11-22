@@ -93,7 +93,7 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 		}
 
 		signingContext := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(cert))
-		// CA API Gateway IdP requires the excluse canonicalization algorithm
+		// CA API Gateway IdP requires the exclusive canonicalization algorithm
 		//
 		// From the spec: http: //docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
 		// 5.4.3 Canonicalization Method
@@ -115,7 +115,7 @@ func (sp *ServiceProvider) SAMLRequestForm(authnRequest []byte, relayState strin
 			return "", errors.Errorf("expecting at least one child element for authn request")
 		}
 
-		// Signature required an element, not document
+		// Signature requires an element, not document
 		element := doc.Child[0].(*etree.Element)
 		sig, err := signingContext.ConstructSignature(element, true)
 		if err != nil {
